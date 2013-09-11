@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+#TODO:: Clear the code and make music2 command tree
+#----------------------------------
+# $Authors: Beifang Niu $
+# $Date: 2013-08-08 13:22:08 -0500 (Thu Aug  8 13:22:08 CDT 2013) $
+# $Revision:  $
+# $URL: $
+#----------------------------------
+use strict;
+use warnings;
+
+use Getopt::Long;
+
+#use TGI::Mutpro::Proximity;
+#use TGI::Mutpro::Visual;
+#use TGI::Mutpro::Uppro;
+#use TGI::Mutpro::Calpro;
+#use TGI::Mutpro::Statis;
+#use TGI::Mutpro::Trans;
+#use TGI::Mutpro::Calroi;
+#use TGI::Mutpro::Anno;
+#use TGI::Mutpro::Cosmic;
+#use TGI::Mutpro::Prior;
+#use TGI::Mutpro::Homolog;
+
+#use Proximity;
+#use Visual;
+#use Uppro;
+#use Calpro;
+#use Calroi;
+#use Statis;
+#use Anno;
+#use Trans;
+#use Cosmic;
+#use Prior;
+#use Homolog;
+
+my $VERSION = 'V0.1';
+
+my $subCmd = shift;
+my %cmds = map{ ($_, 1) } qw( bmr clinical-correlation cosmic cosmic-omim create-visualizations data mutation-relation path-scan pfam play plot proximity proximity-window smg survival );
+unless ( defined $subCmd ) { die help_text(); };
+unless ( exists $cmds{$subCmd} ) {
+    warn ' Please give valid sub command ! ', "\n";
+    die help_text();
+}
+
+SWITCH:{
+    #$subCmd eq 'search' && do { TGI::Mutpro::Proximity->new(); last SWITCH; };
+    #$subCmd eq 'visual' && do { TGI::Mutpro::Visual->new();    last SWITCH; };
+    #$subCmd eq 'uppro'  && do { TGI::Mutpro::Uppro->new();     last SWITCH; };
+    #$subCmd eq 'calpro' && do { TGI::Mutpro::Calpro->new();    last SWITCH; };
+    #$subCmd eq 'calroi' && do { TGI::Mutpro::Calroi->new();    last SWITCH; };
+    #$subCmd eq 'statis' && do { TGI::Mutpro::Statis->new();    last SWITCH; };
+    #$subCmd eq 'anno'   && do { TGI::Mutpro::Anno->new();      last SWITCH; };
+    #$subCmd eq 'trans'  && do { TGI::Mutpro::Trans->new();     last SWITCH; };
+    #$subCmd eq 'homo'   && do { TGI::Mutpro::Homolog->new();     last SWITCH; };
+    #$subCmd eq 'cosmic' && do { TGI::Mutpro::Cosmic->new();    last SWITCH; };
+    #$subCmd eq 'prior'  && do { TGI::Mutpro::Prior->new();     last SWITCH; };
+    $subCmd eq 'help'   && do { die help_text(); last SWITCH; };
+}
+
+sub help_text {
+        return <<HELP        
+Program: music2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2.
+Version: $VERSION
+Author: Beifang Niu && Cyriac Kandoth
+Usage:   music2 <command> [options]
+
+Key commands:
+
+bmr                    ...  Calculate gene coverages and background mutation rates.
+clinical-correlation        Correlate phenotypic traits against mutated genes, or       
+                             against individual variants.
+cosmic                      Match a list of variants to those in COSMIC, and highlight  
+                             druggable targets.
+cosmic-omim                 Compare the amino acid changes of supplied mutations to
+                             COSMIC and OMIM databases.
+create-visualizations       no description!!!: define doc in the class definition for
+                             Genome::Model::Tools::Music::CreateVisualizations
+data                   ...  Parse, standardize, and index various third-party datasets  
+                             used by the tools in MuSiC.
+mutation-relation           Identify relationships of mutation concurrency or mutual    
+                             exclusivity in genes across cases.
+path-scan                   Find signifcantly mutated pathways in a cohort given a list 
+                             of somatic mutations.
+pfam                        Add Pfam annotation to a MAF file.
+play                        Run the full suite of MuSiC2 tools sequentially.
+plot                   ...  Generate relevant plots and visualizations for MuSiC2.
+proximity                   Perform a proximity analysis on a list of mutations.
+proximity-window            Perform a sliding window proximity analysis on a list of mutations.
+smg                         Identify significantly mutated genes.
+survival                    Create survival plots and P-values for clinical and mutational phenotypes.  
+
+help      this message
+
+SUPPORT
+For user support please mail bniu\@genome.wustl.edu
+
+HELP
+}
+
+1;
+
