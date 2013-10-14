@@ -1,59 +1,61 @@
-package Genome::Model::Tools::Music::Bmr;
+package TGI::MuSiC2::Bmr;
+
 use warnings;
 use strict;
-use Genome;
 
-our $VERSION = $Genome::Model::Tools::Music::VERSION; 
+use IO::File;
 
-class Genome::Model::Tools::Music::Bmr {
-    #is  => ['Command::Tree','Genome::Model::Tools::Music::Base'],
-    is => ['Command::Tree'],
-    doc => "Calculate gene coverages and background mutation rates."
-};
+use TGI::MuSiC2::CalcBmr; 
+use TGI::MuSiC2::CalcCovg; 
+use TGI::MuSiC2::CalcWigCovg; 
+use TGI::MuSiC2::CalcCovgHelper;
 
-sub _doc_copyright_years {
-    (2010,2011);
+## process subcommands
+sub new {
+    my $class = shift;
+    my $this = {};
+    $this->{SUBCOMMAND} = shift;
+    bless $this, $class;
+    $this->process();
+
+    return $this;
 }
 
-sub _doc_license {
-    my $self = shift;
-    my (@y) = $self->_doc_copyright_years;  
-    return <<EOS
-Copyright (C) $y[0]-$y[1] Washington University in St. Louis.
+sub process {
+    my $this = shift;
+    my %cmds = map{ ($_, 1) } qw( calc-bmr calc-covg calc-covg-helper calc-wig-covg );
+    unless ( defined $this->{SUBCOMMAND} ) { die help_text(); };
+    unless ( exists $cmds{ $this->{SUBCOMMAND} } ) {
+        warn ' Please give valid sub command ! ', "\n";
+        die help_text();
+    }
 
-It is released under the Lesser GNU Public License (LGPL) version 3.  See the 
-associated LICENSE file in this distribution.
-EOS
+    SWITCH:{
+        $this->{SUBCOMMAND} eq 'calc-bmr'         && do { TGI::MuSiC2::CalcBmr->new();        last SWITCH; };
+        $this->{SUBCOMMAND} eq 'calc-covg'        && do { TGI::MuSiC2::CalcCovg->new();       last SWITCH; };
+        $this->{SUBCOMMAND} eq 'calc-covg-helper' && do { TGI::MuSiC2::CalcCovgHelper->new(); last SWITCH; };
+        $this->{SUBCOMMAND} eq 'calc-wig-covg'    && do { TGI::MuSiC2::CalcWigCovg->new();    last SWITCH; };
+
+        $this->{SUBCOMMAND} eq 'help'       && do { die help_text(); last SWITCH; };
+    }
+
 }
 
+## Bmr subcmds
+sub help_text {
+    my $this = shift;
+        return <<HELP        
+Sub-commands for music2 bmr:
+calc-bmr             Calculates mutation rates given per-gene coverage (from     
+                      "music2 bmr calc-covg"), and a mutation list                
+calc-covg            Uses calcRoiCovg.c to count covered bases per-gene for each 
+                      given tumor-normal pair of BAMs.                           
+calc-covg-helper     Uses calcRoiCovg.c to count covered bases per-gene for a    
+                      tumor-normal pair of BAMs.                                 
+calc-wig-covg        Count covered bases per-gene for each given wiggle track    
+                      format file.                                               
 
-sub _doc_authors {
-    return " Cyriac Kandoth, Ph.D.";
-}
-
-=cut
-sub _doc_credits {
-    # used to compose man pages 
-    # (return a list of strings)
-    return ('','None at this time.');
-}
-=cut
-
-sub _doc_see_also {
-    return <<EOS
-B<genome-music-bmr-calc-covg>(1),
-B<genome-music-bmr-calc-bmr>(1),
-B<genome-music>(1),
-B<genome>(1)
-EOS
-}
-
-sub _doc_manual_body {
-    return shift->help_detail;
-}
-
-sub help_detail { 
-    return "These tools are part of the MuSiC suite.\n";
+HELP
 }
 
 1;

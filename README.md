@@ -43,6 +43,13 @@ For user support please mail bniu@genome.wustl.edu
 
 Install
 -------
+        Install dependencies: 
+           samtools    : http://sourceforge.net/projects/samtools
+           joinx       : https://github.com/genome/joinx
+           calcRoiCovg :https://github.com/Beifang/calcRoiCovg
+
+        Install cpanm:
+           http://search.cpan.org/~miyagawa/App-cpanminus-1.7001/bin/cpanm
 
         Just run: cpanm MuSiC2-0.1.tar.gz
 
