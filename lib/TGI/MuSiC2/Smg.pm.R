@@ -118,15 +118,26 @@ mut_class_test <- function( x, xmax = 100, hmax = 25, bin = 0.001 ) {
 }
 
 dotest <- function( idx, mut, zgenes ) {
-    step = round( length( zgenes ) / processors );
-    start = step * ( idx - 1 ) + 1;
-    stop = step * idx;
-    if( idx == processors ) { stop = length( zgenes ); }
+    
+    # step = round( length( zgenes ) / processors );
+    # start = step * ( idx - 1 ) + 1;
+    # stop = step * idx;
+    # if( idx == processors ) { stop = length( zgenes ); }
+
+    ## in order to get load balance 
+    # scatter genes alternativelly instead of 
+    # scatter them by segment 
+    #
+    start = 1
+    stop = length( zgenes )
+    index = start; idxx = idx - 1
     tt = NULL;
     for( Gene in zgenes[start:stop] ) {
+        if ( index %% processors != idxx ) { index = index + 1; next }
         mutgi = mut[mut$Gene==Gene,];
         mut_class_test( mutgi[,2:5], hmax = 25, bin = 0.001 ) -> z;
         tt = rbind( tt, cbind( Gene, unique( z$x[,(9:11)] )));
+        index = index + 1;
     }
     return( tt );
 }

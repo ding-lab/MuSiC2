@@ -97,6 +97,18 @@ sub process {
     print STDERR "MAF file not found or is empty: $this->{_MAF_FILE}\n"     unless( -s $this->{_MAF_FILE} );
     return undef unless( -s $this->{_ROI_FILE} && -e $this->{_REF_SEQ} && -s $this->{_BAM_LIST} && -e $this->{_OUTPUT_DIR} && -s $this->{_MAF_FILE} );
     #
+    #
+    ## Mutation clusters potentially from the same event
+    #  should be treated together
+    #
+    my $ref_rep_muts = $this->mut_clustering( $this->{_MAF_FILE} );
+    my ( undef, $temp_clustering_maf_file ) = tempfile();
+    my $temp_clustering_maf_fileFh = IO::File->new( $temp_clustering_maf_file, ">" ) or die "Temporary file could not be created. $!";
+    foreach my $rep_mut ( @$ref_rep_muts ) { $temp_clustering_maf_fileFh->print( $rep_mut ) };
+    $temp_clustering_maf_fileFh->close;
+    $this->{_MAF_FILE} = $temp_clustering_maf_file;
+    #
+    #
     # process boolean paras
     #
     $this->{_SKIP_NON_CODING} = 0 if ( $this->{_NOSKIP_NON_CODING} );
@@ -216,11 +228,14 @@ sub process {
     }
     $totCovgFh->close;
     #
+    #
     unless( $sample_cnt_in_total_covgs_file == scalar( @all_sample_names )) {
         print STDERR "Mismatching number of samples in $total_covgs_file and $this->{_BAM_LIST}\n";
         return undef;
     }
+    #
     # Stores per gene covg and mutation information
+    #
     my @gene_mr;
     foreach my $gene ( @all_gene_names ) {
         foreach my $sample ( @all_sample_names ) {
@@ -382,21 +397,25 @@ sub process {
             }
             #
             # Use the classify hash to find whether this SNV is an AT/CG Transition/Transversion
+            #
             $class = $classify{ "$ref$var1" } if( defined $classify{ "$ref$var1" } );
             $class = $classify{ "$ref$var2" } if( defined $classify{ "$ref$var2" } );
             #
             # Check if the ref base in the MAF matched what we fetched from the ref-seq
+            #
             my $locus = "$chr\t$start";
             if ( defined $ref_base{$locus} && $ref_base{$locus} ne $ref ) {
                 print STDERR "Reference allele $ref for $gene variant at $chr:$start-$stop is " . $ref_base{$locus} . " in the FASTA. Using it anyway.\n";
             }
             #
             # Check if a C or G reference allele belongs to a CpG pair in the refseq
+            #
             if (( $ref eq 'C' || $ref eq 'G' ) && defined $cpg_site{$locus} ) {
                 $class = (( $class == CG_Transitions ) ? CpG_Transitions : CpG_Transversions );
             }
         }
         # Classify it as an indel (excludes splice-site and frame-shift if user wanted truncations separately)
+        #
         elsif ( $mutation_type =~ m/^(INS|DEL)$/ ) {
             $class = Indels;
         }
@@ -405,9 +424,11 @@ sub process {
         $sample_mr[$sample_idx{$sample}][$class][mutations]++ unless( defined $ignored_genes{$gene} );
         $gene_mr[$sample_idx{$sample}][$gene_idx{$gene}][$class][mutations]++;
     }
+    #
     $mafFh->close;
     #
     # Display statistics related to parsing the MAF
+    #
     print STDERR "Finished Parsing the MAF file to classify mutations\n";
     foreach my $skip_type ( sort {$skip_cnts{$b} <=> $skip_cnts{$a}} keys %skip_cnts ) {
         print STDERR "Skipped " . $skip_cnts{$skip_type} . " mutation(s) that $skip_type\n" if( defined $skip_cnts{$skip_type} );
@@ -435,6 +456,7 @@ sub process {
     }
     #
     # Calculate per-sample BMRs, and also subtract out covered bases in genes the user wants ignored
+    #
     foreach my $sample ( @all_sample_names ) {
         my $tot_muts = 0;
         foreach my $class ( @mut_classes ) {
@@ -449,6 +471,7 @@ sub process {
     }
     #
     # Cluster samples into bmr-groups using k-means clustering
+    #
     my @sample_bmrs = map { $sample_mr[$sample_idx{$_}][Overall][bmr] } @all_sample_names;
     my @bmr_clusters = k_means( $this->{_BMR_GROUPS}, \@sample_bmrs );
     #
@@ -465,7 +488,8 @@ sub process {
             $totBmrFh->print( "#BMR sub-group ", $i + 1, " (", scalar( @{$bmr_clusters[$i]} ), " samples)\n" );
             $totBmrFh->print( "#Samples: ", join( ",", @samples_in_cluster ), "\n" );
         }
-        $totBmrFh->print( "#Mutation_Class\tCovered_Bases\tMutations\tOverall_BMR\n" );
+        #$totBmrFh->print( "#Mutation_Class\tCovered_Bases\tMutations\tOverall_BMR\n" );
+        $totBmrFh->print( "#Mutation_Class\tCovered_Bases\tMutations\tOverall_BMR\tCovered_Bases_per\n" );
         my ( $tot_covd_bases, $tot_muts ) = ( 0, 0 );
         foreach my $class ( @mut_classes ) {
             my ( $covd_bases, $mutations ) = ( 0, 0 );
@@ -476,19 +500,31 @@ sub process {
             $tot_covd_bases = $covd_bases if ( $class == Indels ); # Save this to calculate overall BMR below
             # Calculate overall BMR for this mutation class and print it to file
             $cluster_bmr{$i}[$class][bmr] = ( $covd_bases == 0 ? 0 : ( $mutations / $covd_bases ));
-            $totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr] ), "\n" );
+
+            # added for qunyuan's requirement 
+            #
+            #
+            $cluster_bmr{$i}[$class]["cov"] = $covd_bases;
+            #$totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr] ), "\n" );
+            $totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
+
             $tot_muts += $mutations;
         }
-        $totBmrFh->print( join( "\t", "Overall_BMR", $tot_covd_bases, $tot_muts, $tot_muts / $tot_covd_bases ), "\n\n" );
+        #$totBmrFh->print( join( "\t", "Overall_BMR", $tot_covd_bases, $tot_muts, $tot_muts / $tot_covd_bases ), "\n\n" );
+        $totBmrFh->print( join( "\t", "Overall_BMR", $tot_covd_bases, $tot_muts, $tot_muts / $tot_covd_bases, $tot_covd_bases ), "\n\n" );
         $covered_bases_sum += $tot_covd_bases;
         $mutations_sum += $tot_muts;
     }
     $totBmrFh->close;
+    #
     #$this->{_BMR_OUTPUT}( $mutations_sum / $covered_bases_sum );
     $this->{_BMR_OUTPUT} = $mutations_sum / $covered_bases_sum ;
-    # Print out a file containing per-gene mutation counts and covered bases for use by "music smg"
+    #
+    # Print out a file containing per-gene mutation counts and 
+    # covered bases for use by "music smg"
+    #
     my $geneBmrFh = IO::File->new( $gene_mr_file, ">" ) or die "Couldn't open $gene_mr_file. $!";
-    $geneBmrFh->print( "#Gene\tMutation_Class\tCovered_Bases\tMutations\tBMR\n" );
+    $geneBmrFh->print( "#Gene\tMutation_Class\tCovered_Bases\tMutations\tBMR\tCovered_Bases_per\n" );
     foreach my $gene ( sort @all_gene_names ) {
         my ( $tot_covd_bases, $tot_muts ) = ( 0, 0 );
         for ( my $i = 0; $i < scalar( @bmr_clusters ); ++$i ) {
@@ -503,12 +539,14 @@ sub process {
                 }
                 my $rename_class = $mut_class_names[$class];
                 $rename_class = ( $rename_class . "_SubGroup" . ( $i + 1 )) if (  $this->{_BMR_GROUPS} > 1 );
-                $geneBmrFh->print( join( "\t", $gene, $rename_class, $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr] ), "\n" );
+                $geneBmrFh->print( join( "\t", $gene, $rename_class, $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
+
                 $tot_muts += $mutations;
                 $tot_covd_bases += $covd_bases if( $class == Indels );
             }
         }
-        $geneBmrFh->print( join( "\t", $gene, "Overall", $tot_covd_bases, $tot_muts, $this->{_BMR_OUTPUT} ), "\n" );
+        #$geneBmrFh->print( join( "\t", $gene, "Overall", $tot_covd_bases, $tot_muts, $this->{_BMR_OUTPUT} ), "\n" );
+        $geneBmrFh->print( join( "\t", $gene, "Overall", $tot_covd_bases, $tot_muts, $this->{_BMR_OUTPUT}, $covered_bases_sum ), "\n" );
     }
     $geneBmrFh->close;
 
@@ -581,6 +619,78 @@ sub count_bits {
     return $count;
 }
 
+## mutation clustering | provide one new MAF file
+#
+# Mutation clusters potentially from the same event, should be treated together 
+#  
+# Step 1: Check for samples with > 2 mutations per gene.
+# Step 2: Only retain two mutations per sample per gene in this order:
+
+#    1.  Nonsense 
+#    2.  Frameshift 
+#    3.  Splice-Site (intronic positions 1-2bp from the exon)
+#    4.  In_Frame
+#    5.  Missense
+#    6.  No_Stop,Nonstop,Readthrough
+
+#Step 3. Write a file with the discarded mutations for users to check
+#
+#
+sub mut_clustering {
+    my ( $this, $p_maf_file, ) = @_;
+    my ( %cluster_hash, @collecting, );
+    #
+    # keep maximal 2 mutations 
+    # for one class
+    #
+    my $max_number_of_muts_keep = 2;
+    my @total_class_types = qw( Nonsense Frameshift Splicesite Inframe Missense Nonstop Other );
+    my $p_mafFh = IO::File->new( $p_maf_file ) or die "Couldn't open $p_maf_file. $!";
+    while ( my $p_line = $p_mafFh->getline ) {
+        if ( $p_line =~ m/^(#|Hugo_Symbol)/ ) { push( @collecting, $p_line ); next; };
+        my @p_cols = split( /\t/, $p_line );
+        my ( $gene, $v_class, $tumor_barcode ) = ( split /\t/, $p_line )[0,8,15];
+        ## convert class type to upcase
+        my $v_class_format = {
+            'Nonsense'    => 'Nonsense',
+            'Frame_Shift' => 'Frameshift',
+            'Splice_Site' => 'Splicesite',
+            'In_Frame'    => 'Inframe',
+            'Missense'    => 'Missense', 
+            'No_stop'     => 'Nonstop',
+            'Nonstop'     => 'Nonstop',
+            'Readthrough' => 'Nonstop',
+        }->{$v_class} || "Other";
+        $cluster_hash{$tumor_barcode}{$gene}{$v_class_format}{$p_line} = 1;
+        $cluster_hash{$tumor_barcode}{$gene}{Number}++;
+    }
+    ## scanning 
+    foreach my $tumor ( keys %cluster_hash ) {
+        foreach my $gene ( keys %{$cluster_hash{$tumor}} ) {
+            next unless ( defined $cluster_hash{$tumor}{$gene}{Number} );
+            if ( ($cluster_hash{$tumor}{$gene}{Number} <= $max_number_of_muts_keep) && ($cluster_hash{$tumor}{$gene}{Number} >= 1) ) {
+                foreach my $class ( @total_class_types ) {
+                    foreach my $mut ( keys %{$cluster_hash{$tumor}{$gene}{$class}} ) { push( @collecting, $mut ); }
+                }
+            } else {
+                ## select muts based on 
+                ###  class priority 
+                my $temp_mut_number = 0;
+                foreach my $class ( @total_class_types ) {
+                    foreach my $mut ( keys %{$cluster_hash{$tumor}{$gene}{$class}} ) {
+                        last if ( $temp_mut_number >= $max_number_of_muts_keep );
+                        push( @collecting, $mut );
+                        $temp_mut_number++;
+                    }
+                    last if ( $temp_mut_number >= $max_number_of_muts_keep );
+                }
+            }
+        }
+    }
+    ## return collected muts
+    ####
+    return \@collecting;
+}
 
 ## usage
 sub help_text {

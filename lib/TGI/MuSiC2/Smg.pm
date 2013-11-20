@@ -26,6 +26,8 @@ sub new {
     $this->{NO_DOWNSAMPLE_LARGE_GENES} = 1;
     $this->{_SKIP_NON_EXPRESSED_GENES} = 1;
     $this->{NO_SKIP_NON_EXPRESSED_GENES} = 0;
+    $this->{_SKIP_PSEUDOGENES} = 1;
+    $this->{NO_SKIP_PSEUDOGENES} = 0;
 
     $this->{_BMR_MODIFIER_FILE} = undef;
     $this->{_BLACK_GENE_LIST_FILE} = undef;
@@ -49,6 +51,9 @@ sub process {
         'noskip-low-mr-genes'        => \$this->{NO_SKIP_LOW_MR_GENES},
         'skip-non-expressed-genes'   => \$this->{_SKIP_NON_EXPRESSED_GENES},
         'noskip-non-expressed-genes' => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
+        'skip-pseudogenes'           => \$this->{_SKIP_},
+        'noskip-pseudogenes'         => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
+
         'downsample-large-genes'     => \$this->{_DOWNSAMPLE_LARGE_GENES},
         'nodownsample-large-genes'   => \$this->{NO_DOWNSAMPLE_LARGE_GENES},
         'bmr-modifier-file=s'        => \$this->{_BMR_MODIFIER_FILE},
@@ -67,7 +72,6 @@ sub process {
     #
     # Check on all the input data before starting work
     print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
-    print STDERR "BMR modifier file not found or is empty: $this->{_BMR_MODIFIER_FILE}\n" unless( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} );
     return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
     #
     # Check boolean paras
@@ -87,19 +91,26 @@ sub process {
         # covered bps than mutations detected
         #
         if ( $type ne "Overall" and $covd_bps < $mut_cnt ) { warn "#More $type seen in $gene than there are bps with sufficient coverage!\n"; }
-        if ( $type eq "Overall" ) {
-            $gene_muts{$gene}{Overall} = $mut_cnt;
-            $gene_bps{$gene} = $covd_bps;
-        } elsif ( $type =~ m/^Truncations/ ) {
-            $gene_muts{$gene}{Truncations} += $mut_cnt;
-            $mut_categ_hash{Truncations} = 1;
-        } elsif ( $type =~ m/^Indels/ ) {
-            $gene_muts{$gene}{Indels} += $mut_cnt;
-            $mut_categ_hash{Indels} = 1;
-        } elsif ( $type =~ m/^(AT_|CG_|CpG_)(Transitions|Transversions)/ ) {
-            $gene_muts{$gene}{SNVs} += $mut_cnt;
-            $mut_categ_hash{SNVs} = 1;
-        } else { die "Unrecognized mutation category in gene-mr-file. $!\n"; }
+        SWITCH:{
+            $type =~ m/^Overall/ && do { 
+                $gene_muts{$gene}{Overall} = $mut_cnt; 
+                $gene_bps{$gene} = $covd_bps;       
+                last SWITCH; };
+            $type =~ m/^Truncations/ && do { 
+                $gene_muts{$gene}{Truncations} += $mut_cnt;
+                $mut_categ_hash{Truncations} = 1;
+                last SWITCH; };
+            $type =~ m/^Indels/ && do {
+                $gene_muts{$gene}{Indels} += $mut_cnt;
+                $mut_categ_hash{Indels} = 1;
+                last SWITCH; }; 
+            $type =~ m/^(AT_|CG_|CpG_)(Transitions|Transversions)/ && do {
+                $gene_muts{$gene}{SNVs} += $mut_cnt;
+                $mut_categ_hash{SNVs} = 1;
+                last SWITCH; };
+            # default 
+            die "Unrecognized mutation category in gene-mr-file. $!\n";
+        }
     }
     $inMrFh->close;
     my @mut_categs = sort keys %mut_categ_hash;
@@ -234,7 +245,12 @@ sub process {
     my ( undef, $pval_file ) = tempfile();
     my $pvalFh = IO::File->new( $pval_file, ">" ) or die "Temporary file could not be created. $!";
     #
+    #
+    my $testcmd = "cp $this->{_GENE_MR_FILE} new.gene.mr.file";
+    system( $testcmd );
+    #
     # Call R for Fisher combined test, Likelihood ratio test, and convolution test on each gene
+    #
     my $smg_cmd = "R --slave --args < " . __FILE__ . ".R $this->{_GENE_MR_FILE} $pval_file smg_test $this->{_PROCESSORS} $this->{_SKIP_LOW_MR_GENES}";
     WIFEXITED( system $smg_cmd ) or croak "Couldn't run: $smg_cmd ($?)";
     #
@@ -280,8 +296,9 @@ sub process {
     #### do expressed filtering 
     # load expression black gene list
     # 
-    my $black_gene_list_ref = undef;
-    $black_gene_list_ref = $this->{_SKIP_NON_EXPRESSED_GENES} ? $this->black_genes( $this->{_BLACK_GENE_LIST_FILE} ) : undef;
+    #my $black_gene_list_ref = undef;
+    #$black_gene_list_ref = $this->{_SKIP_NON_EXPRESSED_GENES} ? $this->black_genes( $this->{_BLACK_GENE_LIST_FILE} ) : undef;
+    my $black_gene_list_ref = $this->black_genes( $this->{_BLACK_GENE_LIST_FILE} );
     #
     # Add per-gene SNV and Indel counts to the detailed R output, and 
     # make the header friendlier
@@ -290,11 +307,12 @@ sub process {
     foreach ( @newLines ) {
         if ( /^\#Gene/ ) { 
             s/\n/\tExpression\n/; 
+            $outDetFh->print( $_ );
         } else {
             /^(.*?)\t/;
             ( defined $black_gene_list_ref->{$1} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
+            $outDetFh->print( $_ ) unless( defined $black_gene_list_ref->{$1} and $this->{_SKIP_NON_EXPRESSED_GENES} );
         }
-        $outDetFh->print( $_ );
     }
     $outDetFh->close;
     #
@@ -304,16 +322,16 @@ sub process {
     foreach ( @smgLines ) {
         if ( /^\#Gene/ ) { 
             s/\n/\tExpression\n/; 
+            $outFh->print( $_ );
         } else {
             /^(.*?)\t/;
             ( defined $black_gene_list_ref->{$1} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
+            $outFh->print( $_ ) unless( defined $black_gene_list_ref->{$1} and $this->{_SKIP_NON_EXPRESSED_GENES} );
         }
-        $outFh->print( $_ );
     }
     $outFh->close;
 
     return 1;
-
 }
 
 ## black gene list
@@ -431,4 +449,6 @@ HELP
 }
 
 1;
+
+
 
