@@ -10,6 +10,8 @@ use TGI::MuSiC2::CalcCovg;
 use TGI::MuSiC2::CalcWigCovg; 
 use TGI::MuSiC2::CalcCovgHelper;
 use TGI::MuSiC2::CalcWindowRoi;
+use TGI::MuSiC2::CalcWindowMaf;
+use TGI::MuSiC2::CalcBmrModifier;
 
 ## process subcommands
 sub new {
@@ -24,7 +26,7 @@ sub new {
 
 sub process {
     my $this = shift;
-    my %cmds = map{ ($_, 1) } qw( calc-bmr calc-covg calc-covg-helper calc-wig-covg calc-window-roi calc-bmr-modifier );
+    my %cmds = map{ ($_, 1) } qw( calc-bmr calc-covg calc-covg-helper calc-wig-covg calc-window-roi calc-window-maf calc-bmr-modifier );
     unless ( defined $this->{SUBCOMMAND} ) { die help_text(); };
     unless ( exists $cmds{ $this->{SUBCOMMAND} } ) {
         warn ' Please give valid sub command ! ', "\n";
@@ -38,6 +40,7 @@ sub process {
         $this->{SUBCOMMAND} eq 'calc-covg-helper'  && do { TGI::MuSiC2::CalcCovgHelper->new();  last SWITCH; };
         $this->{SUBCOMMAND} eq 'calc-wig-covg'     && do { TGI::MuSiC2::CalcWigCovg->new();     last SWITCH; };
         $this->{SUBCOMMAND} eq 'calc-window-roi'   && do { TGI::MuSiC2::CalcWindowRoi->new();   last SWITCH; };
+        $this->{SUBCOMMAND} eq 'calc-window-maf'   && do { TGI::MuSiC2::CalcWindowMaf->new();   last SWITCH; };
 
         $this->{SUBCOMMAND} eq 'help'       && do { die help_text(); last SWITCH; };
     }
@@ -60,6 +63,7 @@ calc-covg-helper     Uses calcRoiCovg.c to count covered bases per-gene for a
 calc-wig-covg        Count covered bases per-gene for each given wiggle track    
                       format file.
 calc-window-roi      Given gene/region ROIs, generates window based ROIs.
+calc-window-maf      Given mutation list (MAF), generates window based MAF file.
 
 HELP
 }

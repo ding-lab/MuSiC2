@@ -32,6 +32,7 @@ sub new {
     $this->{_BMR_MODIFIER_FILE} = undef;
     $this->{_BLACK_GENE_LIST_FILE} = undef;
     $this->{_PROCESSORS} = 1;
+    $this->{_QQ_PLOT_FILE} = "smg_test_qq_plot.pdf";
 
     bless $this, $class;
     $this->process();
@@ -59,28 +60,23 @@ sub process {
         'bmr-modifier-file=s'        => \$this->{_BMR_MODIFIER_FILE},
         'black-gene-list-file=s'     => \$this->{_BLACK_GENE_LIST_FILE},
         'processors=i'               => \$this->{_PROCESSORS},
+        'qq-plot-file=s'             => \$this->{_QQ_PLOT_FILE},
 
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
     #### processing ####
-    #
     # Check on all the input data
-    #
     my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
-    #
     # Check on all the input data before starting work
     print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
     return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
-    #
     # Check boolean paras
     if ( $this->{NO_SKIP_LOW_MR_GENES} ) { $this->{_SKIP_LOW_MR_GENES} = 0; };
     if ( $this->{NO_SKIP_NON_EXPRESSED_GENES} ) { $this->{_SKIP_NON_EXPRESSED_GENES} = 0; }
-    #
     # Collect per-gene mutation rates for 
     # reporting in results later
-    #
     my ( %gene_muts, %gene_bps, %mut_categ_hash );
     my $inMrFh = IO::File->new( $this->{_GENE_MR_FILE} ) or die "Couldn't open $this->{_GENE_MR_FILE}. $!\n";
     while ( my $line = $inMrFh->getline ) {
@@ -237,30 +233,35 @@ sub process {
         $inMrFh->close;
         $this->{_GENE_MR_FILE} = $tmp_gene_mr_file;
     }
-    #
+    # rearrange gene mrs file for load balance 
+    # of parallelation or SMG test
+    my ( %gene_hash, %gene_mutations_hash, @temp_arr, $temp_index );
+    my $new_gene_mrs_fh = IO::File->new( $this->{_GENE_MR_FILE} ) or die "Couldn't open $this->{_GENE_MR_FILE}. $!\n";
+    map{ @_ = split /\t/; $gene_hash{ $_[0] } .= $_; if ( $_[1] eq "Overall" ) { $gene_mutations_hash{$_[0]} += $_[3]; } } $new_gene_mrs_fh->getlines;
+    $new_gene_mrs_fh->close();
+    # sorting by mutation number
+    my @sorted_genes = sort{ $gene_mutations_hash{$b} <=> $gene_mutations_hash{$a} } keys %gene_mutations_hash;
+    my ( $con, @tt, @ss, $k, ); $con = ""; $k = 1;
+    map{ $con .= $_.","; if ( $_ % $this->{_PROCESSORS} == 0 ){ push(@tt, $con); $con = ""; } } (1..@sorted_genes);
+    # pick up last one if need
+    unless( @sorted_genes % $this->{_PROCESSORS} == 0 ){ push(@tt, $con); };
+    map{ if ( $k % 2 == 0 ){ push( @ss, reverse(split /,/, $_) ); } else { push( @ss, (split /,/, $_) ); }; $k++; } @tt;
+    my ( undef, $resorted_gene_mrs ) = tempfile();
+    my $resorted_gene_mrs_fh = IO::File->new( $resorted_gene_mrs, ">" ) or die "Temporary file could not be created. $!";
+    map{ $resorted_gene_mrs_fh->print( $gene_hash{ $sorted_genes[$_-1] } ); } @ss;
+    $resorted_gene_mrs_fh->close();
+    $this->{_GENE_MR_FILE} = $resorted_gene_mrs;
     # Create a temporary intermediate file to hold the p-values
-    # using File::Temp module instead of Genome::Sys
-    #my (undef, $pval_file) = Genome::Sys->create_temp_file_path();
-    #
     my ( undef, $pval_file ) = tempfile();
     my $pvalFh = IO::File->new( $pval_file, ">" ) or die "Temporary file could not be created. $!";
-    #
-    #
-    my $testcmd = "cp $this->{_GENE_MR_FILE} new.gene.mr.file";
-    system( $testcmd );
-    #
     # Call R for Fisher combined test, Likelihood ratio test, and convolution test on each gene
-    #
     my $smg_cmd = "R --slave --args < " . __FILE__ . ".R $this->{_GENE_MR_FILE} $pval_file smg_test $this->{_PROCESSORS} $this->{_SKIP_LOW_MR_GENES}";
     WIFEXITED( system $smg_cmd ) or croak "Couldn't run: $smg_cmd ($?)";
-    #
     # Call R for calculating FDR on the p-values calculated in the SMG test
     my $fdr_cmd = "R --slave --args < " . __FILE__ . ".R $pval_file $output_file_detailed calc_fdr $this->{_PROCESSORS} $this->{_SKIP_LOW_MR_GENES}";
     WIFEXITED( system $fdr_cmd ) or croak "Couldn't run: $fdr_cmd ($?)";
-    #
     # Parse the R output to identify the SMGs (significant 
     # by at least 2 of 3 tests)
-    #
     my $smgFh = IO::File->new( $output_file_detailed ) or die "Couldn't open $output_file_detailed. $!\n";
     my ( @newLines, @smgLines );
     my $header = "#Gene\t" . join( "\t", @mut_categs );
@@ -280,38 +281,31 @@ sub process {
             }
             my $mut_per_mbp = ( $gene_bps{$gene} ? sprintf( "%.2f", ( $gene_muts{$gene}{Overall} / $gene_bps{$gene} * 1000000 )) : 0 );
             push( @newLines, join( "\t", $gene, @mut_cnts, $gene_muts{$gene}{Overall}, $gene_bps{$gene}, $mut_per_mbp, @pq_vals ) . "\n" );
-            #
             # If the FDR of at least two of these tests is less than the maximum 
             # allowed, we consider it an SMG
-            #
             if ( ( $q_fcpt <= $this->{_MAX_FDR} && $q_lrt <= $this->{_MAX_FDR} ) || ( $q_fcpt <= $this->{_MAX_FDR} && $q_ct <= $this->{_MAX_FDR} ) ||
                ( $q_lrt <= $this->{_MAX_FDR} && $q_ct <= $this->{_MAX_FDR} )) {
                 push( @smgLines, join( "\t", $gene, @mut_cnts, $gene_muts{$gene}{Overall}, $gene_bps{$gene}, $mut_per_mbp, @pq_vals ) . "\n" );
             }
         }
     }
-    #
     $smgFh->close;
-    #
     #### do expressed filtering 
     # load expression black gene list
-    # 
     #my $black_gene_list_ref = undef;
     #$black_gene_list_ref = $this->{_SKIP_NON_EXPRESSED_GENES} ? $this->black_genes( $this->{_BLACK_GENE_LIST_FILE} ) : undef;
     my $black_gene_list_ref = $this->black_genes( $this->{_BLACK_GENE_LIST_FILE} );
-    #
     # Add per-gene SNV and Indel counts to the detailed R output, and 
     # make the header friendlier
-    #
     my $outDetFh = IO::File->new( $output_file_detailed, ">" ) or die "Couldn't open $output_file_detailed. $!\n";
     foreach ( @newLines ) {
         if ( /^\#Gene/ ) { 
             s/\n/\tExpression\n/; 
             $outDetFh->print( $_ );
         } else {
-            /^(.*?)\t/;
-            ( defined $black_gene_list_ref->{$1} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
-            $outDetFh->print( $_ ) unless( defined $black_gene_list_ref->{$1} and $this->{_SKIP_NON_EXPRESSED_GENES} );
+            my ($gene) = /^(.*?)\t/;
+            ( defined $black_gene_list_ref->{$gene} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
+            $outDetFh->print( $_ ) unless( defined $black_gene_list_ref->{$gene} and $this->{_SKIP_NON_EXPRESSED_GENES} );
         }
     }
     $outDetFh->close;
@@ -324,18 +318,20 @@ sub process {
             s/\n/\tExpression\n/; 
             $outFh->print( $_ );
         } else {
-            /^(.*?)\t/;
-            ( defined $black_gene_list_ref->{$1} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
-            $outFh->print( $_ ) unless( defined $black_gene_list_ref->{$1} and $this->{_SKIP_NON_EXPRESSED_GENES} );
+            my ($gene) = /^(.*?)\t/;
+            ( defined $black_gene_list_ref->{$gene} ) ? s/\n/\tnon-expressed\n/ : s/\n/\texpressed\n/;
+            $outFh->print( $_ ) unless( defined $black_gene_list_ref->{$gene} and $this->{_SKIP_NON_EXPRESSED_GENES} );
         }
     }
     $outFh->close;
+    # Call R for qqplot 
+    my $qq_cmd = "R --slave --args < " . __FILE__ . ".qqplot.R $output_file_detailed $this->{_QQ_PLOT_FILE}";
+    WIFEXITED( system $qq_cmd ) or croak "Couldn't run: $qq_cmd ($?)";
 
     return 1;
 }
 
 ## black gene list
-#
 sub black_genes {
     my ( $this, $black_genes_matrix_file, ) = @_;
     return undef unless ( defined $black_genes_matrix_file );
@@ -392,6 +388,9 @@ OPTIONAL INPUTS
   processors
     Number of cores to use (requires 'foreach' and 'doMC' R packages) 
     Default value '1' if not specified
+  qq-plot-file
+    output qq plot file for SMG test result.
+    Default value 'smg_test_qq_plot.pdf'
 
 DESCRIPTION
     This script runs R-based statistical tools to identify Significantly Mutated Genes (SMGs), when
@@ -449,6 +448,4 @@ HELP
 }
 
 1;
-
-
 

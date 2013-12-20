@@ -36,9 +36,6 @@ Key commands:
     smg                         Identify significantly mutated genes.
     survival                    Create survival plots and P-values for clinical and mutational phenotypes.      
 
-SUPPORT
-
-For user support please mail bniu@genome.wustl.edu
 
 
 Install
@@ -54,4 +51,10 @@ Install
         Just run: cpanm MuSiC2-0.1.tar.gz
 
 xxx
+
+
+SUPPORT
+-------
+
+For user support please mail bniu@genome.wustl.edu
 

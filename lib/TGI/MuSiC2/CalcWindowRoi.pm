@@ -59,15 +59,15 @@ sub process {
         ( $stop >= $start ) or die "Stop locus is less than start in:\n$line\n\n";
         my ( $start_window, $stop_window ) = (( int(($start-1)/$this->{_WINDOW_SIZE}) * $this->{_WINDOW_SIZE} + 1 ), ( int(($stop-1)/$this->{_WINDOW_SIZE}) * $this->{_WINDOW_SIZE} + 1 ));
         if ( $start_window == $stop_window ) {
-            $outputfh->print( "$chr\t$start\t$stop\tchr$chr:$start_window\n" );
+            $outputfh->print( "$chr\t$start\t$stop\tCHR$chr:$start_window\n" );
         } elsif ( $start_window < $stop_window ) {
-            $outputfh->print( "$chr\t$start\t",  $start_window + $this->{_WINDOW_SIZE} - 1, "\tchr$chr:$start_window\n" );
+            $outputfh->print( "$chr\t$start\t",  $start_window + $this->{_WINDOW_SIZE} - 1, "\tCHR$chr:$start_window\n" );
             $start_window += $this->{_WINDOW_SIZE};
             while ( $start_window != $stop_window ) {
-                $outputfh->print( "$chr\t$start_window\t", $start_window + $this->{_WINDOW_SIZE} - 1, "\tchr$chr:$start_window\n" );
+                $outputfh->print( "$chr\t$start_window\t", $start_window + $this->{_WINDOW_SIZE} - 1, "\tCHR$chr:$start_window\n" );
                 $start_window += $this->{_WINDOW_SIZE};
             }
-            $outputfh->print( "$chr\t$stop_window\t$stop\tchr$chr:$stop_window\n" );
+            $outputfh->print( "$chr\t$stop_window\t$stop\tCHR$chr:$stop_window\n" );
         } else { die "Unhandled exception! \n"; }
     }
     $roifh->close();
@@ -101,7 +101,7 @@ SYNOPSIS
  music2 bmr calc-window-roi \
     --roi-file input_dir/all_coding_exons.tsv \
     --output-roi-file output_dir/window_roi.tsv \
-    --window-size 500000
+    --window-size 1000000
 
 REQUIRED INPUTS
   roi-file
@@ -118,12 +118,8 @@ REQUIRED OUTPUTS
   output-roi-file 
 
 DESCRIPTION
-    Given a mutation list (MAF), and per-gene coverage data calculated using "music bmr
-    calc-covg"), this script calculates overall Background Mutation Rate (BMR) and BMRs in the
-    categories of AT/CG/CpG Transitions, AT/CG/CpG Transversions, and Indels. An optional category
-    for truncational mutations can also be specified. The script generates a file with per-gene
-    mutation rates that can be used with the tool that tests for significantly mutated genes (music
-    smg).
+    Given a tab delimited list of ROIs [chr start stop gene_name] and window size. 
+    The script generates a file with window based ROIs.
 
 
 ARGUMENTS
