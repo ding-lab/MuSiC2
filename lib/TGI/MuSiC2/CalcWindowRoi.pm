@@ -75,11 +75,11 @@ sub process {
     #
     my ( undef, $temp_win_sorted_bed ) = tempfile();
     unless ( -e $temp_win_sorted_bed ) { die "Temporary file could not be created. $!" };
-    system( "joinx1.8 sort -i $temp_win_bed -o $temp_win_sorted_bed" );
+    system( "joinx sort -i $temp_win_bed -o $temp_win_sorted_bed" );
     #
     # write results
     #
-    system( "joinx1.8 bed-merge -n -u -i $temp_win_sorted_bed -o $this->{_OUTPUT_ROI_FILE}" );
+    system( "joinx bed-merge -n -u -i $temp_win_sorted_bed -o $this->{_OUTPUT_ROI_FILE}" );
     #
     #
     return 1;

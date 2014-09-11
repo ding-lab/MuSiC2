@@ -1,13 +1,93 @@
-package Genome::Model::Tools::Music::ClinicalCorrelation;
-
+package TGI::MuSiC2::ClinicalCorrelation;
+##
+# Matthew Wyczalkowski improved the new R code and fixed the bug
+# ( 08.21.2014 )
+##
 use warnings;
 use strict;
 use Carp;
-use Genome;
 use IO::File;
 use POSIX qw( WIFEXITED );
+use Getopt::Long;
+use File::Temp qw/ tempfile /;
 
-our $VERSION = $Genome::Model::Tools::Music::VERSION;
+sub new {
+    my $class = shift;
+    my $this = {};
+
+    $this->{_GENE_MR_FILE} = undef;
+    $this->{_OUTPUT_FILE}  = undef;
+    $this->{_MAX_FDR} = 0.2;
+    $this->{_SKIP_LOW_MR_GENES} = 1;
+    $this->{NO_SKIP_LOW_MR_GENES} = 0;
+    $this->{_DOWNSAMPLE_LARGE_GENES} = 0;
+    $this->{NO_DOWNSAMPLE_LARGE_GENES} = 1;
+    $this->{_SKIP_NON_EXPRESSED_GENES} = 1;
+    $this->{NO_SKIP_NON_EXPRESSED_GENES} = 0;
+    $this->{_SKIP_PSEUDOGENES} = 1;
+    $this->{NO_SKIP_PSEUDOGENES} = 0;
+
+    $this->{_BMR_MODIFIER_FILE} = undef;
+    $this->{_BLACK_GENE_LIST_FILE} = undef;
+    $this->{_PROCESSORS} = 1;
+    $this->{_QQ_PLOT_FILE} = "smg_test_qq_plot.pdf";
+
+    bless $this, $class;
+    $this->process();
+
+    return $this;
+}
+
+sub process {
+    my $this = shift;
+    my ( $help, $options );
+    unless( @ARGV ) { die $this->help_text(); }
+    $options = GetOptions (
+        'gene-mr-file=s'             => \$this->{_GENE_MR_FILE},
+        'output-file=s'              => \$this->{_OUTPUT_FILE},
+        'max-fdr=f'                  => \$this->{_MAX_FDR},
+        'skip-low-mr-genes'          => \$this->{_SKIP_LOW_MR_GENES},
+        'noskip-low-mr-genes'        => \$this->{NO_SKIP_LOW_MR_GENES},
+        'skip-non-expressed-genes'   => \$this->{_SKIP_NON_EXPRESSED_GENES},
+        'noskip-non-expressed-genes' => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
+        'skip-pseudogenes'           => \$this->{_SKIP_},
+        'noskip-pseudogenes'         => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
+
+        'downsample-large-genes'     => \$this->{_DOWNSAMPLE_LARGE_GENES},
+        'nodownsample-large-genes'   => \$this->{NO_DOWNSAMPLE_LARGE_GENES},
+        'bmr-modifier-file=s'        => \$this->{_BMR_MODIFIER_FILE},
+        'black-gene-list-file=s'     => \$this->{_BLACK_GENE_LIST_FILE},
+        'processors=i'               => \$this->{_PROCESSORS},
+        'qq-plot-file=s'             => \$this->{_QQ_PLOT_FILE},
+
+        'help' => \$help,
+    );
+    if ( $help ) { print STDERR help_text(); exit 0; }
+    unless( $options ) { die $this->help_text(); }
+    #### processing ####
+    # Check on all the input data
+    my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
+    # Check on all the input data before starting work
+    print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
+    return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
+    # Check boolean paras
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class Genome::Model::Tools::Music::ClinicalCorrelation {
     is => 'Genome::Model::Tools::Music::Base',

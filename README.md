@@ -41,9 +41,9 @@ Key commands:
 Install
 -------
         Install dependencies: 
-           samtools    : http://sourceforge.net/projects/samtools
-           joinx       : https://github.com/genome/joinx
-           calcRoiCovg :https://github.com/Beifang/calcRoiCovg
+           samtools                : http://sourceforge.net/projects/samtools/files/samtools/0.1.19  (recommended version 0.1.19)
+           joinx (v1.8 or higher)  : https://github.com/genome/joinx
+           calcRoiCovg             : https://github.com/Beifang/calcRoiCovg
 
         Install cpanm:
            http://search.cpan.org/~miyagawa/App-cpanminus-1.7001/bin/cpanm

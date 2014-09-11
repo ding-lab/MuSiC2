@@ -13,11 +13,13 @@ use Getopt::Long;
 
 use TGI::MuSiC2::Bmr;
 use TGI::MuSiC2::Smg;
+use TGI::MuSiC2::Dendrix;
+#use TGI::MuSiC2::ClinicalCorrelation;
 
 my $VERSION = 'V0.1';
 
 my $sub_cmd = shift;
-my %cmds = map{ ($_, 1) } qw( bmr clinical-correlation cosmic cosmic-omim create-visualizations data mutation-relation path-scan pfam play plot proximity proximity-window smg survival help );
+my %cmds = map{ ($_, 1) } qw( bmr clinical-correlation cosmic cosmic-omim create-visualizations data mutation-relation path-scan pfam play plot proximity proximity-window smg survival dendrix help );
 unless ( defined $sub_cmd ) { die help_text(); };
 unless ( exists $cmds{$sub_cmd} ) {
     warn ' Please give valid sub command ! ', "\n";
@@ -27,6 +29,8 @@ unless ( exists $cmds{$sub_cmd} ) {
 SWITCH:{
     $sub_cmd eq 'bmr' && do { my $sub_cmd2 = shift; TGI::MuSiC2::Bmr->new( $sub_cmd2 ); last SWITCH; };
     $sub_cmd eq 'smg' && do { TGI::MuSiC2::Smg->new(); last SWITCH; };
+    $sub_cmd eq 'dendrix' && do { TGI::MuSiC2::Dendrix->new(); last SWITCH; };
+#    $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
     #
     ##
     $sub_cmd eq 'help'   && do { die help_text(); last SWITCH; };

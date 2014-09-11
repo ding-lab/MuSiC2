@@ -94,11 +94,11 @@ sub process {
     $new_rois_fh->close();
     my ( undef, $temp_0_based_win_bmrs_sorted ) = tempfile();
     my ( undef, $temp_0_based_roi_file_sorted ) = tempfile();
-    system( "joinx1.8 sort -i $temp_0_based_roi_file -o $temp_0_based_roi_file_sorted" );
-    system( "joinx1.8 sort -i $temp_0_based_win_bmrs -o $temp_0_based_win_bmrs_sorted" );
+    system( "joinx sort -i $temp_0_based_roi_file -o $temp_0_based_roi_file_sorted" );
+    system( "joinx sort -i $temp_0_based_win_bmrs -o $temp_0_based_win_bmrs_sorted" );
     my ( undef, $temp_intersected_file ) = tempfile();
     ## do intersecting
-    system( "joinx1.8 intersect --output-both -a $temp_0_based_roi_file_sorted -b $temp_0_based_win_bmrs_sorted -o $temp_intersected_file" );
+    system( "joinx intersect --output-both -a $temp_0_based_roi_file_sorted -b $temp_0_based_win_bmrs_sorted -o $temp_intersected_file" );
     @cont = ();
     my $intersect_fh = IO::File->new( $temp_intersected_file ) or die "Temporary file could not be opened. $!";
     while ( my $line = $intersect_fh->getline ) { chomp( $line ); push( @cont, $line ); };
