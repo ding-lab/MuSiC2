@@ -26,13 +26,20 @@ sub new {
 
 sub process {
     my $this = shift;
-    my %cmds = map{ ($_, 1) } qw( calc-bmr calc-covg calc-covg-helper calc-wig-covg calc-window-roi calc-window-maf calc-bmr-modifier );
-    unless ( defined $this->{SUBCOMMAND} ) { die help_text(); };
-    unless ( exists $cmds{ $this->{SUBCOMMAND} } ) {
+    my %cmds = map{
+        ($_, 1)
+    } qw( calc-bmr 
+          calc-covg 
+          calc-covg-helper 
+          calc-wig-covg 
+          calc-window-roi 
+          calc-window-maf 
+          calc-bmr-modifier );
+    unless (defined $this->{SUBCOMMAND}) { die help_text(); };
+    unless (exists $cmds{ $this->{SUBCOMMAND}}) {
         warn ' Please give valid sub command ! ', "\n";
         die help_text();
     }
-
     SWITCH:{
         $this->{SUBCOMMAND} eq 'calc-bmr'          && do { TGI::MuSiC2::CalcBmr->new();         last SWITCH; };
         $this->{SUBCOMMAND} eq 'calc-bmr-modifier' && do { TGI::MuSiC2::CalcBmrModifier->new(); last SWITCH; };
@@ -69,3 +76,33 @@ HELP
 }
 
 1;
+
+__END__
+ 
+=head1 NAME
+
+TGI::MuSiC2::Bmr - Sub-commands for music2 bmr.
+
+=head1 SYNOPSIS
+
+TGI::MuSiC2::Bmr - Sub-commands for music2 bmr.
+
+=head1 DESCRIPTION
+
+MuSiC2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2. 
+
+=head1 AUTHOR
+
+Beifang Niu E<lt>beifang.cn@gmail.comE<gt>
+
+=head1 SEE ALSO
+
+https://github.com/ding-lab/MuSiC2
+
+=head1 LICENSE
+
+This library is free software with MIT licence; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
+

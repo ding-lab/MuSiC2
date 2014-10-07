@@ -51,7 +51,7 @@ sub new {
     $this->{_SKIP_SILENT} = 1;
     $this->{_NOSKIP_SILENT} = 0;
     $this->{_BMR_OUTPUT} = 0;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,GC';
+    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
 
     bless $this, $class;
     $this->process();

@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-#TODO:: Clear the code and make music2 command tree
 #----------------------------------
 # $Authors: Beifang Niu $
 # $Date: 2013-08-08 13:22:08 -0500 (Thu Aug  8 13:22:08 CDT 2013) $
@@ -8,6 +7,7 @@
 #----------------------------------
 use strict;
 use warnings;
+our $VERSION = 'v0.1';
 
 use Getopt::Long;
 
@@ -16,12 +16,29 @@ use TGI::MuSiC2::Smg;
 use TGI::MuSiC2::Dendrix;
 #use TGI::MuSiC2::ClinicalCorrelation;
 
-my $VERSION = 'V0.1';
-
 my $sub_cmd = shift;
-my %cmds = map{ ($_, 1) } qw( bmr clinical-correlation cosmic cosmic-omim create-visualizations data mutation-relation path-scan pfam play plot proximity proximity-window smg survival dendrix help );
-unless ( defined $sub_cmd ) { die help_text(); };
-unless ( exists $cmds{$sub_cmd} ) {
+my %cmds = map{ 
+    ($_, 1) 
+} qw( bmr 
+      clinical-correlation 
+      cosmic 
+      cosmic-omim 
+      create-visualizations 
+      data 
+      mutation-relation 
+      path-scan 
+      pfam 
+      play 
+      plot 
+      proximity 
+      proximity-window 
+      smg 
+      survival 
+      dendrix 
+      help );
+
+unless (defined $sub_cmd) { die help_text(); };
+unless (exists $cmds{$sub_cmd}) {
     warn ' Please give valid sub command ! ', "\n";
     die help_text();
 }
@@ -77,3 +94,33 @@ HELP
 }
 
 1;
+
+__END__
+ 
+=head1 NAME
+
+MuSiC2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2.
+
+=head1 SYNOPSIS
+
+  music2 --help;
+
+=head1 DESCRIPTION
+
+MuSiC2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2. 
+
+=head1 AUTHOR
+
+Beifang Niu E<lt>beifang.cn@gmail.comE<gt>
+
+=head1 SEE ALSO
+
+https://github.com/ding-lab/MuSiC2
+
+=head1 LICENSE
+
+This library is free software with MIT licence; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
+

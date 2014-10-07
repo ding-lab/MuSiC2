@@ -12,18 +12,16 @@ use Getopt::Long;
 sub new {
     my $class = shift;
     my $this = {};
-
     $this->{_ROI_FILE} = undef;
     $this->{_REF_SEQ}  = undef;
     $this->{_BAM_LIST} = undef;
     $this->{_OUTPUT_DIR} = undef;
     $this->{_CMD_LIST_FILE} = undef;
     $this->{_CMD_PREFIX} = undef;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,GC';
+    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
     $this->{_NOR_MIN_DEPTH} = 6;
     $this->{_TUM_MIN_DEPTH} = 8;
     $this->{_MIN_MAPQ} = 20;
-
     bless $this, $class;
     $this->process();
 
@@ -32,8 +30,8 @@ sub new {
 
 sub process {
     my $this = shift;
-    my ( $help, $options );
-    unless( @ARGV ) { die $this->help_text(); }
+    my ($help, $options);
+    unless(@ARGV) { die $this->help_text(); }
     $options = GetOptions (
         'roi-file=s'              => \$this->{_ROI_FILE},
         'reference-sequence=s'    => \$this->{_REF_SEQ},
@@ -47,8 +45,8 @@ sub process {
         'min-mapq=i'              => \$this->{_MIN_MAPQ},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; }
-    unless( $options ) { die $this->help_text(); }
+    if ($help) { print STDERR help_text(); exit 0; }
+    unless($options) { die $this->help_text(); }
     #### processing ####
     #
     # Check on all the input data
@@ -265,7 +263,7 @@ OPTIONAL INPUTS
     The minimum mapping quality of reads to consider towards read depth counts 
   bp-class-types
     Bp class types for coverage calculating,delimited by comma
-    Default value 'AT,CpG,GC' if not specified
+    Default value 'AT,CpG,CG' if not specified
 
 DESCRIPTION
     This script counts bases with sufficient coverage in the ROIs of each gene in the given pairs
