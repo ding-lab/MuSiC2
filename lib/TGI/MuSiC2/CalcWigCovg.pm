@@ -119,9 +119,9 @@ sub process {
     my $totCovgFh = IO::File->new( $tot_covg_file, ">" );
     #
     #
-    #$totCovgFh->print( "#Sample\tCovered_Bases\tAT_Bases_Covered\tCG_Bases_Covered\tCpG_Bases_Covered\n" );
+    $totCovgFh->print( "#Sample\tCovered_Bases\tAT_Bases_Covered\tCG_Bases_Covered\tCpG_Bases_Covered\n" );
     #
-    $totCovgFh->print( "#Sample\tCovered_Bases\t", join("_Bases_Covered\t", @bp_types_array), "_Bases_Covered\n" ); 
+    #$totCovgFh->print( "#Sample\tCovered_Bases\t", join("_Bases_Covered\t", @bp_types_array), "_Bases_Covered\n" ); 
 
     # Parse through each pair of WIG files provided and run calcRoiCovg as necessary
     my $wigFh = IO::File->new( $this->{_WIG_LIST} );
