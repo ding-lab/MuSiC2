@@ -23,9 +23,7 @@ use constant { AT_Transitions    => 0,
                Overall           => 8,
                covd_bases        => 0, 
                mutations         => 1, 
-               bmr               => 2,
-               cov               => 1,
-           };
+               bmr => 2 };
 #
 #
 use IO::File;
@@ -53,7 +51,7 @@ sub new {
     $this->{_SKIP_SILENT} = 1;
     $this->{_NOSKIP_SILENT} = 0;
     $this->{_BMR_OUTPUT} = 0;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
+    $this->{_BP_CLASS_TYPES} = 'AT,CpG,GC';
 
     bless $this, $class;
     $this->process();
@@ -339,7 +337,7 @@ sub process {
         # If the mutation classification is odd, quit with error
         if ( $mutation_class !~ m/^(Missense_Mutation|Nonsense_Mutation|Nonstop_Mutation|Splice_Site|Translation_Start_Site|Frame_Shift_Del|Frame_Shift_Ins|In_Frame_Del|In_Frame_Ins|Silent|Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region|De_novo_Start_InFrame|De_novo_Start_OutOfFrame)$/ ) {
             print STDERR "Unrecognized Variant_Classification \"$mutation_class\" in MAF file: $gene, $chr:$start-$stop\n";
-            nprint STDERR "Please use TCGA MAF Specification v2.3.\n";
+            print STDERR "Please use TCGA MAF Specification v2.3.\n";
             return undef;
         }
         #
@@ -506,11 +504,9 @@ sub process {
             # added for qunyuan's requirement 
             #
             #
-            #$cluster_bmr{$i}[$class]["cov"] = $covd_bases;
-            $cluster_bmr{$i}[$class][cov] = $covd_bases;
+            $cluster_bmr{$i}[$class]["cov"] = $covd_bases;
             #$totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr] ), "\n" );
-            #$totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
-            $totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class][cov] ), "\n" );
+            $totBmrFh->print( join( "\t", $mut_class_names[$class], $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
 
             $tot_muts += $mutations;
         }
@@ -537,18 +533,13 @@ sub process {
                 my ( $covd_bases, $mutations ) = ( 0, 0 );
                 foreach my $sample( @samples_in_cluster ) {
                     if ( defined $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}} ) {
-                        if ( defined $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][covd_bases] ) {
-                            $covd_bases += $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][covd_bases];
-                        }
-                        if ( defined $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][mutations] ) {
-                            $mutations += $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][mutations];
-                        }
+                        $covd_bases += $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][covd_bases];
+                        $mutations += $gene_mr{$sample_idx{$sample}}{$gene_idx{$gene}}[$class][mutations];
                     }
                 }
                 my $rename_class = $mut_class_names[$class];
                 $rename_class = ( $rename_class . "_SubGroup" . ( $i + 1 )) if (  $this->{_BMR_GROUPS} > 1 );
-                #$geneBmrFh->print( join( "\t", $gene, $rename_class, $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
-                $geneBmrFh->print( join( "\t", $gene, $rename_class, $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class][cov] ), "\n" );
+                $geneBmrFh->print( join( "\t", $gene, $rename_class, $covd_bases, $mutations, $cluster_bmr{$i}[$class][bmr], $cluster_bmr{$i}[$class]["cov"] ), "\n" );
 
                 $tot_muts += $mutations;
                 $tot_covd_bases += $covd_bases if( $class == Indels );
@@ -660,27 +651,15 @@ sub mut_clustering {
         my @p_cols = split( /\t/, $p_line );
         my ( $gene, $v_class, $tumor_barcode ) = ( split /\t/, $p_line )[0,8,15];
         ## convert class type to upcase
-        #my $v_class_format = {
-        #    'Nonsense'    => 'Nonsense',
-        #    'Frame_Shift' => 'Frameshift',
-        #    'Splice_Site' => 'Splicesite',
-        #    'In_Frame'    => 'Inframe',
-        #    'Missense'    => 'Missense', 
-        #    'No_stop'     => 'Nonstop',
-        #    'Nonstop'     => 'Nonstop',
-        #    'Readthrough' => 'Nonstop',
-        #}->{$v_class} || "Other";
         my $v_class_format = {
-            'Nonsense_Mutation'    => 'Nonsense',
-            'Frame_Shift_Del'      => 'Frameshift',
-            'Frame_Shift_Ins'      => 'Frameshift',
-            'Splice_Site'          => 'Splicesite',
-            'In_Frame_Del'         => 'Inframe',
-            'In_Frame_Ins'         => 'Inframe',
-            'Missense_Mutation'    => 'Missense', 
-            'No_stop'              => 'Nonstop',
-            'Nonstop'              => 'Nonstop',
-            'Readthrough'          => 'Nonstop',
+            'Nonsense'    => 'Nonsense',
+            'Frame_Shift' => 'Frameshift',
+            'Splice_Site' => 'Splicesite',
+            'In_Frame'    => 'Inframe',
+            'Missense'    => 'Missense', 
+            'No_stop'     => 'Nonstop',
+            'Nonstop'     => 'Nonstop',
+            'Readthrough' => 'Nonstop',
         }->{$v_class} || "Other";
         $cluster_hash{$tumor_barcode}{$gene}{$v_class_format}{$p_line} = 1;
         $cluster_hash{$tumor_barcode}{$gene}{Number}++;
