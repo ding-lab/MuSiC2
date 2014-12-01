@@ -78,7 +78,7 @@ Install bedtools
         make
         sudo mv ./bin /usr/local/bin/
 
-In order to install HotSpot3D package, we need CPANM program
+In order to install MuSiC2 package, we need CPANM program
 (cpanm - get, unpack build and install modules from CPANM)
 
         sudo apt-get install cpanminus
