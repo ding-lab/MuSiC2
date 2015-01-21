@@ -12,7 +12,8 @@ output = as.character(args[5])
 
 pdf( output )
 # plot 1: 
-read.table( input, header = TRUE )[,11]->p
+#read.table( input, header = TRUE )[,11]->p
+read.table( input, header = F )[,9]->p
 p = p[p>0]
 p = p[p<1]
 p = p[!is.na(p)]

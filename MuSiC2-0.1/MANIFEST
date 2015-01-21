@@ -27,6 +27,7 @@ lib/TGI/MuSiC2/ProximityWindow.pm
 lib/TGI/MuSiC2/Smg.pm
 lib/TGI/MuSiC2/Smg.pm.R
 lib/TGI/MuSiC2/Smg.pm.qqplot.R
+lib/TGI/MuSiC2/Smg.pm.qqplot.correct.R
 lib/TGI/MuSiC2/Survival.pm
 lib/TGI/MuSiC2/Survival.pm.R
 lib/TGI/MuSiC2/Survival.pm.R.bak

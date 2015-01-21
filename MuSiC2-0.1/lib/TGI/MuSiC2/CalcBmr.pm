@@ -108,6 +108,12 @@ sub process {
     my $temp_clustering_maf_fileFh = IO::File->new( $temp_clustering_maf_file, ">" ) or die "Temporary file could not be created. $!";
     foreach my $rep_mut ( @$ref_rep_muts ) { $temp_clustering_maf_fileFh->print( $rep_mut ) };
     $temp_clustering_maf_fileFh->close;
+    # output this temporary maf file for Cyriac's test
+    #
+    my $cp_command = "cp $temp_clustering_maf_file temporary_MAF_from_mutation_cluster_function_20150121.maf" );
+    system( $cp_command );
+    #
+    #
     $this->{_MAF_FILE} = $temp_clustering_maf_file;
     #
     #

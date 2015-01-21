@@ -327,6 +327,17 @@ sub process {
     # Call R for qqplot 
     my $qq_cmd = "R --slave --args < " . __FILE__ . ".qqplot.R $output_file_detailed $this->{_QQ_PLOT_FILE}";
     WIFEXITED( system $qq_cmd ) or croak "Couldn't run: $qq_cmd ($?)";
+    # Create the new smg detailed file with new format for qunyuan
+    my ( undef, $format_smg_detailed ) = tempfile();
+    my $format_smg_detailedFh = IO::File->new( $format_smg_detailed, ">" ) or die "Temporary file could not be created. $!";
+    my $output_file_detailedFh = IO::File->new( $output_file_detailed ) or die "Couldn't open $output_file_detailed. $!";
+    $format_smg_detailedFh->print( "Gene\tIndels\tSNVs\tTot_Muts\tCovd_Bps\tMuts_pMbp\tP_value_FCPT\tP_value_LRT\tP_value_CT\tFDR_FCPT\tFDR_LRT\tFDR_CT\tExpression\n" );
+    map{ unless( /^#/ ) { $format_smg_detailedFh->print( $_ ) } } $output_file_detailedFh->getlines;
+    $format_smg_detailedFh->close; $output_file_detailedFh->close;
+    # Call R for corrected qqplot
+    my $new_qqplot_output_file = "corrected_".$this->{_QQ_PLOT_FILE};
+    $qq_cmd = "R --slave --args < " . __FILE__ . ".qqplot.correct.R $format_smg_detailed $new_qqplot_output_file";
+    WIFEXITED( system $qq_cmd ) or croak "Couldn't run: $qq_cmd ($?)";
 
     return 1;
 }
