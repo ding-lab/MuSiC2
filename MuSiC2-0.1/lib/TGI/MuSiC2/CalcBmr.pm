@@ -110,7 +110,7 @@ sub process {
     $temp_clustering_maf_fileFh->close;
     # output this temporary maf file for Cyriac's test
     #
-    my $cp_command = "cp $temp_clustering_maf_file temporary_MAF_from_mutation_cluster_function_20150121.maf" );
+    my $cp_command = "cp $temp_clustering_maf_file temporary_MAF_from_mutation_cluster_function_20150121.maf";
     system( $cp_command );
     #
     #
