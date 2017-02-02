@@ -6,7 +6,7 @@ Usage
 -----
 
     Program:     music2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2.
-    Version:     V0.1
+    Version:     V0.2
     Author:      Beifang Niu && Cyriac Kandoth
 
     Usage:  music2 <command> [options]
@@ -96,7 +96,7 @@ Install MuSiC2 package
         
         git clone https://github.com/ding-lab/MuSiC2
         cd MuSiC2
-        cpanm MuSiC2-0.1.tar.gz
+        cpanm MuSiC2-#.#.tar.gz
 
 example
 -------

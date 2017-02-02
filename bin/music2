@@ -7,7 +7,7 @@
 #----------------------------------
 use strict;
 use warnings;
-our $VERSION = 'v0.1';
+our $VERSION = 'v0.2';
 
 use Getopt::Long;
 
