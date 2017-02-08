@@ -164,9 +164,14 @@ sub process {
     # Parse gene names and ROIs. Mutations outside 
     # these ROIs will be skipped
     #
+    # also creating @all_gene_names - a list of all unique gene names encountered
+    # gene_idx -> hash mapping gene name to index
+    # "gene" name is actually ROI
+    # sample roi_file
+    # 1   11867   12229   DDX11L1
     my ( @all_gene_names, %gene_idx );
     $idx = 0;
-    my $roi_bitmask = $this->create_empty_genome_bitmask( $ref_seq_idx );
+    my $roi_bitmask = $this->create_empty_genome_bitmask( $ref_seq_idx );   # presumably this is a hash of binary vectors, each the size of resp. chrom?
     #
     my $roiFh = IO::File->new( $this->{_ROI_FILE} ) or die "Couldn't open $this->{_ROI_FILE}. $!";
     while ( my $line = $roiFh->getline ) {
@@ -184,6 +189,9 @@ sub process {
         }
     }
     $roiFh->close;
+
+########
+
     #
     # These are the various categories that each 
     # mutation will be classified into
@@ -196,10 +204,12 @@ sub process {
     #
     my @mut_class_names = qw( AT_Transitions AT_Transversions CG_Transitions CG_Transversions CpG_Transitions CpG_Transversions Indels );
     push( @mut_class_names, 'Truncations' ) if ( $this->{_SEPERATE_TRUNCATIONS} );
+
     #
-    # Stores per sample covg 
-    # and mutation information
+    # sample_mr: Stores per sample covg and mutation information
     #
+#####
+    # sample_mr is a large hash, sample_mr[sample_index][mutation_class][mutations OR base_coverage]
     my @sample_mr;
     foreach my $sample ( @all_sample_names ) {
         $sample_mr[$sample_idx{$sample}][$_][mutations] = 0 foreach( @mut_classes );
@@ -210,6 +220,11 @@ sub process {
     # output of "music bmr calc-covg"
     #
     print STDERR "Loading per-sample coverages stored in $total_covgs_file\n";
+# sample data in total_covgs
+# (from /gscmnt/sata166/info/medseq/mbailey/Pancan2/CESC/output)
+# #Sample Covered_Bases   AT_Bases_Covered    GC_Bases_Covered    CpG_Bases_Covered
+# TCGA-UC-A7PD-01A-11D-A351-09    37809442    18529553    17218334    2061554
+
     my $sample_cnt_in_total_covgs_file = 0;
     my $totCovgFh = IO::File->new( $total_covgs_file ) or die "Couldn't open $total_covgs_file. $!";
     while( my $line = $totCovgFh->getline ) {
@@ -234,8 +249,11 @@ sub process {
         return undef;
     }
     #
-    # Stores per gene covg and mutation information
+    # gene_mr: Stores per gene covg and mutation information
     #
+    #######
+    # gene_mr is a very large hash, gene_mr[sample_index][gene_index][mutation_class][mutations OR base_coverage]
+    # note that "genes" are any ROI
     my @gene_mr;
     foreach my $gene ( @all_gene_names ) {
         foreach my $sample ( @all_sample_names ) {
@@ -266,9 +284,14 @@ sub process {
         }
         $sampleCovgFh->close;
     }
+    ############
     #
     # Run "joinx ref-stats" to classify SNVs as being at 
     # AT, CG, or CpG sites in the reference
+
+    # parses MAF file
+    # writes to temporary file entries for all SNP, DNP, ONP, TNP in region [-2,+1]
+    # 
     #
     print STDERR "Running 'joinx1.7 ref-stats' to read reference FASTA and identify SNVs at AT, CG, CpG sites\n";
     #
@@ -276,6 +299,8 @@ sub process {
     my ( undef, $maf_bed ) = tempfile();
     my $mafBedFh = IO::File->new( $maf_bed, ">" ) or die "Temporary file could not be created. $!";
     my $mafFh = IO::File->new( $this->{_MAF_FILE} ) or die "Couldn't open $this->{_MAF_FILE}. $!";
+
+######### Parse MAF file first time to get ?NP positions 
     while( my $line = $mafFh->getline ) {
         next if ( $line =~ m/^(#|Hugo_Symbol)/ );
         chomp $line;
@@ -296,7 +321,9 @@ sub process {
     #
     # Parse through the ref-stats output and load it 
     # into hashes for quick lookup later
-    #
+
+    # Creates $ref_base, $cpg_site hashes based on output of joinx
+    # $locus is string composed of chrom and position
     my ( %ref_base, %cpg_site );
     my $refStatsFh = IO::File->new( $refstats_file ) or die "Couldn't open $refstats_file. $!";
     while( my $line = $refStatsFh->getline ) {
@@ -308,6 +335,8 @@ sub process {
         $cpg_site{$locus} = 1 if ( $ref =~ m/CG/i );
     }
     $refStatsFh->close;
+
+    ############
     #
     # Create a hash to help classify SNVs
     #
@@ -316,6 +345,8 @@ sub process {
     $classify{$_} = AT_Transversions foreach( qw( AC AT TA TG ));
     $classify{$_} = CG_Transitions foreach( qw( CT GA ));
     $classify{$_} = CG_Transversions foreach( qw( CA CG GC GT ));
+
+    ############
     #
     # Parse through the MAF file and categorize 
     # each somatic mutation
@@ -424,6 +455,9 @@ sub process {
         $sample_mr[$sample_idx{$sample}][$class][mutations]++ unless( defined $ignored_genes{$gene} );
         $gene_mr[$sample_idx{$sample}][$gene_idx{$gene}][$class][mutations]++;
     }
+    ######### done parsing MAF file line-by-line
+
+
     #
     $mafFh->close;
     #
@@ -482,6 +516,8 @@ sub process {
     my $totBmrFh = IO::File->new( $overall_bmr_file, ">" ) or die "Couldn't open $overall_bmr_file. $!";
     $totBmrFh->print( "#User-specified genes skipped in these calculations: $this->{_GENES_TO_IGNORE}\n" ) if ( defined $this->{_GENES_TO_IGNORE} );
     my ( $covered_bases_sum, $mutations_sum ) = ( 0, 0 );
+#########
+    # loop over all subgroups
     for ( my $i = 0; $i < scalar( @bmr_clusters ); ++$i ) {
         my @samples_in_cluster = map { $all_sample_names[$_] } @{$bmr_clusters[$i]};
         unless( $this->{_BMR_GROUPS} == 1 ) {
@@ -499,7 +535,7 @@ sub process {
             }
             $tot_covd_bases = $covd_bases if ( $class == Indels ); # Save this to calculate overall BMR below
             # Calculate overall BMR for this mutation class and print it to file
-            $cluster_bmr{$i}[$class][bmr] = ( $covd_bases == 0 ? 0 : ( $mutations / $covd_bases ));
+            $cluster_bmr{$i}[$class][bmr] = ( $covd_bases == 0 ? 0 : ( $mutations / $covd_bases ));  #### The key line ####
 
             # added for qunyuan's requirement 
             #
