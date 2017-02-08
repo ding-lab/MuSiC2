@@ -1,8 +1,5 @@
 package TGI::MuSiC2::ClinicalCorrelation;
-##
-# Matthew Wyczalkowski improved the new R code and fixed the bug
-# ( 08.21.2014 )
-##
+
 use warnings;
 use strict;
 use Carp;
@@ -88,12 +85,18 @@ sub process {
 
 
 
+# TODO, by MAW.  
+# Separating GLM and non-glm functionality would be easier for software maintenance and usability,
+# since these functionalities have little in common.
+# For GLM, workflow should be 1) create mutation matrix file from MAF and 2) perform correlation.
+# These steps should be separate from the user's point of view; keeping them together leads to unnecessary
+# parameters and complicated logic.
 
 class Genome::Model::Tools::Music::ClinicalCorrelation {
     is => 'Genome::Model::Tools::Music::Base',
     has_input => [
         bam_list => {
-            is => 'Text',
+            is => 'Text', , is_optional => 1, # this is optional if mutation matrix is supplied.
             doc => "Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam] (See Description)",
         },
         maf_file => {
@@ -147,6 +150,10 @@ class Genome::Model::Tools::Music::ClinicalCorrelation {
         skip_silent => {
             is => 'Boolean', is_optional => 1, default => 1,
             doc => "Skip silent mutations from the provided MAF file",
+        },
+        skip_correlation => {  # MAW. Create mutation matrix file, but don't run R code.
+            is => 'Boolean', is_optional => 1, default => 0,
+            doc => "Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file",
         },
     ],
     doc => "Correlate phenotypic traits against mutated genes, or against individual variants",
@@ -301,14 +308,17 @@ sub execute {
     my @all_sample_names; # names of all the samples, no matter if it's mutated or not
 
     # parse out the sample names from the bam-list which should match the names in the MAF file
-    my $sampleFh = IO::File->new( $bam_list ) or die "Couldn't open $bam_list. $!\n";
-    while( my $line = $sampleFh->getline ) {
-        next if ( $line =~ m/^#/ );
-        chomp( $line );
-        my ( $sample ) = split( /\t/, $line );
-        push( @all_sample_names, $sample );
+    # MAW bam_list content saved in @all_sample_names.  
+    if ($bam_list) { 
+        my $sampleFh = IO::File->new( $bam_list ) or die "Couldn't open $bam_list. $!\n";
+        while( my $line = $sampleFh->getline ) {
+            next if ( $line =~ m/^#/ );
+            chomp( $line );
+            my ( $sample ) = split( /\t/, $line );
+            push( @all_sample_names, $sample );
+        }
+        $sampleFh->close;
     }
-    $sampleFh->close;
 
     # loop through clinical data files
     for my $datatype ( keys %clinical_data ) {
@@ -316,6 +326,7 @@ sub execute {
         my $test_method;
         my $full_output_filename;
 
+        # MAW why is the option to run any combination of these important?  Good place to split GLM and non-GLM
         if( $datatype =~ /numeric/i ) {
             $full_output_filename = $output_file . ".numeric.tsv";
             $test_method = $self->numerical_data_test_method;
@@ -326,12 +337,13 @@ sub execute {
             $test_method = "fisher";
         }
 
-        if( $datatype =~ /glm/i ) {
-            $full_output_filename = $output_file . ".glm.tsv";
+        if( $datatype =~ /glm/i ) { # here MAW
+            $full_output_filename = $output_file;  # User specifies filename exactly.
             $test_method = "glm";
         }
 
         #read through clinical data file to see which samples are represented and create input matrix for R
+        # This section is not necessary if self->skip_correlation, and makes creating a mutation_matrix file annoying.
         my %samples;
         my $matrix_file;
         my $samples = \%samples;
@@ -345,7 +357,12 @@ sub execute {
             my ( $sample ) = split( /\t/, $line );
             $samples{$sample}++;
         }
+        
         #create correlation matrix unless it's glm analysis without using a maf file
+        # MAW contents of all_sample_names (and bam_list) ignored if GLM and not using MAF.  This is why 
+        # bam_list argument should be optional. -- really?  Empirially, content of bam_list changes nothing, but @all_sample_names is propagaged
+        # Also, there are times when I want to create a matrix file and save it without doing processing.
+        # This is currently not supported.
         unless(( $datatype =~ /glm/i && !$self->use_maf_in_glm ) || $self->input_clinical_correlation_matrix_file ) {
 
             if( $genetic_data_type =~ /^gene$/i ) {
@@ -360,10 +377,15 @@ sub execute {
             }
         }
 
+        # MAW want to have the option to exit loop here, after mutation matrix has been constructed and written to disk.
+        next if ( $self->skip_correlation );  # we want this to work in future
+        #warn("Skipping correlation, hard coded.");  # uncomment to stop after mutation matrix created
+        #next;                                       # uncomment to stop after mutation matrix created
+
+
         if( $self->input_clinical_correlation_matrix_file ) {
             $matrix_file = $self->input_clinical_correlation_matrix_file;
         }
-
         unless( defined $matrix_file ) { $matrix_file = "'*'"; }
 
         #set up R command
@@ -386,6 +408,7 @@ sub execute {
 
 sub create_sample_gene_matrix_gene {
 
+    # NOTE - $clinical_data_file is unused.  Unnecessary argument.
     my ( $self, $samples, $clinical_data_file, @all_sample_names ) = @_;
     my $output_matrix = $self->clinical_correlation_matrix_file;
 
@@ -407,15 +430,18 @@ sub create_sample_gene_matrix_gene {
         }
 
         #check if sample exists in clinical data
-        unless( defined $samples->{$sample} ) {
-            warn "Sample Name: $sample from MAF file does not exist in Clinical Data File";
-            next;
-        }
+        # this is not helpful when creating a mutation matrix from MAF file.
+        # presumably, user has curated MAF file appropriately.  This leads to problems when hoping to use one 
+        # MAF file to create multiple clinical datasets. MAW
+#        unless( defined $samples->{$sample} ) {
+#            warn "Sample Name: $sample from MAF file does not exist in Clinical Data File";
+#            next;
+#        }
 
         # If user wants, skip Silent mutations, or those in Introns, RNA, UTRs, Flanks, IGRs, or the ubiquitous Targeted_Region
         if(( $self->skip_non_coding && $mutation_class =~ m/^(Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region)$/ ) ||
            ( $self->skip_silent && $mutation_class =~ m/^Silent$/ )) {
-            print "Skipping $mutation_class mutation in gene $gene.\n";
+#            print "Skipping $mutation_class mutation in gene $gene.\n";   # annoying - creates millions of useless lines
             next;
         }
 
@@ -459,6 +485,7 @@ sub create_sample_gene_matrix_gene {
 
 sub create_sample_gene_matrix_variant {
 
+    # NOTE - $clinical_data_file is unused.  Unnecessary argument.
     my ( $self, $samples, $clinical_data_file, @all_sample_names ) = @_;
     my $output_matrix = $self->clinical_correlation_matrix_file;
 

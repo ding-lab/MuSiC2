@@ -1,3 +1,4 @@
+options(warn=1) 
 #determine which test method to use
 method = as.character(commandArgs()[4]);
 
@@ -50,23 +51,32 @@ if (method == "glm") {
     # self-defined x.names have to be found in column names of y.file and/or x.file  
 
     #################### myglm fuction ##############
+    # This will crash if trait is all NA
     myglm=function(z,trait,variant,covar=NA,ytype) {
         if (nchar(covar)==0 | is.na(covar) | is.null(covar)) { 
             model=formula(paste(trait,"~",variant)) 
         } else {
-            model=formula(paste(trait,"~",variant,"+",covar))
+            # model=formula(paste(trait,"~",variant,"+",covar)) # this is incorrect, as per Qunyuan discussion 2/21/14
+            model=formula(paste(trait,"~",covar,"+",variant))
         }
+        
         if (ytype=="B") fit=glm(formula=model,data=z,family=binomial(link = "logit"))
         if (ytype=="Q") fit=glm(formula=model,data=z,family=gaussian(link = "identity"))
         fit
     }
     #################################################
 
+    options("width"=200) # DEBUG
 
     ### data input #####
     read.table(model.file,colClasses="character",na.strings = c("","NA"),sep="\t",header=T)->md
     read.table(y.file,na.strings = c("","NA"),sep="\t",header=T)->y
     #if (x.names!="*") x.names=strsplit(x.names,split="[|]")[[1]]
+
+    # TODO: Here, it would be smart to check whether all model names (md[,2]) correspond to columns in y.
+    # obscure errors result if people mistype or use remapped characters (:-<=>)
+
+
 
     if (x.file!="*")
     {
@@ -86,28 +96,57 @@ if (method == "glm") {
 
     ######### analysis ##########
     tt=NULL
-    for (i in c(1:nrow(md)))
+    for (i in c(1:nrow(md)))  # loop through all rows in model
     {
+        # analysis_type   clinical_data_trait_name    variant/gene_name   covariates  memo
         ytype=md[i,1];yi=md[i,2];xs=md[i,3];covi=md[i,4];memo=md[i,5]
+
         if (!is.na(xs) & nchar(xs)>0) xs=strsplit(xs,split="[|]")[[1]]
         if (is.na(xs)[1]|nchar(xs)[1]==0|xs=="*") xs=x.names 
         if (length(covi)==0) covi=NA
         for (xi in xs)
         {
-            print(yi); print(xi); print(covi); print("******")
-            if (ytype=="Q") try(anova(myglm(y,yi,xi,covi,ytype),test="F"))->fit
-            if (ytype=="B") try(anova(myglm(y,yi,xi,covi,ytype),test="Chisq"))->fit
+            # DEBUG
+            #cat(paste("    Processing: yi =", yi, " xi =", xi, " covi =", covi, "\n") )
+
+            if (ytype=="Q") {
+                test = "F"
+            } else if (ytype=="B") {
+                test = "Chisq"
+            } else {
+                stop("Unknown model ytype ", ytype) 
+            }
+            glm = try(myglm(y,yi,xi,covi,ytype))  # MAW new
+            if(class(glm)[1] == "try-error") {
+                # Type of error to catch here:
+                #   Error in family$linkfun(mustart) : 
+                #     Argument mu must be a nonempty numeric vector
+                # This occurs if too many NA's
+                # This also occurs: Error in `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]) : contrasts can be applied only to factors with 2 or more levels
+                #    above happens when using covariate and e.g. disease BLCA has all NA even if other diseases do not
+                cat(paste("    Error caught, continuing.  yi =", yi, " xi =", xi, " covi =", covi, "\n") )
+                next
+            }
+            try(anova(glm,test=test))->fit
+            coeff = coefficients(glm)[[xi]] # MAW new
             if (class(fit)[1]!="try-error")
             {
                 fit=as.matrix(fit)
-                if (xi %in% rownames(fit)) tt=rbind(tt, cbind(yi,ytype,xi,as.data.frame(t(fit[xi,])),covi,memo))
+                # line below dies if mix Q and B ytypes in a single model file
+                if (xi %in% rownames(fit)) tt=rbind(tt, cbind(yi,ytype,xi,as.data.frame(t(fit[xi,])),coeff,covi,memo))
             }
         }
     }
-    #"yi","ytype","xi","Df","Deviance","Resid. Df","Resid. Dev","F","Pr(>F)","covi","memo"
-    if (ytype=="Q") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance","F_statistic","p-value","covariants","memo");
-    if (ytype=="B") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance","p-value","covariants","memo");
-    write.table(tt,file=out.file,quote=F,sep="\t",row.names=F);
+    if (!is.null(tt)) {
+        #"yi","ytype","xi","Df","Deviance","Resid. Df","Resid. Dev","F","Pr(>F)","covi","memo"
+        if (ytype=="Q") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance",
+            "F_statistic","p-value","coefficient","covariants","memo");
+        if (ytype=="B") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance",
+            "p-value","coefficient","covariants","memo");
+        tt$FDR = p.adjust(tt[,"p-value"], method="fdr") # MAW new, calculates FDR based on the method from,
+            # Benjamini, Y., and Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. Journal of the Royal Statistical Society Series B 57, 289–300.
+        write.table(tt,file=out.file,quote=F,sep="\t",row.names=F);
+    }
 
 } else {
 
