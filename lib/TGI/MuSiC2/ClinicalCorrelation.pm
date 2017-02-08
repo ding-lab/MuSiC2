@@ -190,10 +190,14 @@ HELP
 sub help_detail {
     return <<HELP
 
-This command relates clinical traits and mutational data. Either one can perform correlation analysis between mutations recorded in a MAF and the particular phenotypic traits recorded in clinical data files for the same samples, or one can run a generalized linear model (GLM) analysis on the same types of data.
+This command relates clinical traits and mutational data. Either one can
+perform correlation analysis between mutations recorded in a MAF and the
+particular phenotypic traits recorded in clinical data files for the same
+samples, or one can run a generalized linear model (GLM) analysis on the same
+types of data.
 
-The clinical data files for correlation must be separated between numeric and categoric data and must follow these
-conventions:
+The clinical data files for correlation must be separated between numeric and
+categoric data and must follow these conventions:
 
 =over 4
 
@@ -216,7 +220,12 @@ The results are saved to the output filename given with a suffix appended; ".num
 appended for results derived from numeric clinical data, and ".categorical.tsv" will be appended for results
 derived from categorical clinical data. Also, ".glm.tsv" will be appended to the output filename for GLM results.
 
-The GLM analysis accepts a mixed numeric and categoric clinical data file, input using the parameter --glm-clinical-data-file. GLM clinical data must adhere to the formats described above for the correlation clinical data files. GLM also requires the user to input a --glm-model-file. This file requires specific headers and defines the analysis to be performed rather exactly. Here are the conventions required for this file:
+The GLM analysis accepts a mixed numeric and categoric clinical data file,
+input using the parameter --glm-clinical-data-file. GLM clinical data must
+adhere to the formats described above for the correlation clinical data files.
+GLM also requires the user to input a --glm-model-file. This file requires
+specific headers and defines the analysis to be performed rather exactly. Here
+are the conventions required for this file:
 
 =over 4
 
@@ -228,7 +237,12 @@ The GLM analysis accepts a mixed numeric and categoric clinical data file, input
 
 =item * The 'clinical_data_trait_name' is the name of a clinical data trait defined by being a header in the --glm-clinical-data-file.
 
-=item * The 'variant/gene_name' can either be the name of one or more columns from the --glm-clinical-data-file, or the name of one or more mutated gene names from the MAF, separated by "|". If this column is left blank, or instead contains "NA", then each column from either the variant mutation matrix (--use-maf-in-glm) or alternatively the --glm-clinical-data-file is used consecutively as the variant column in independent analyses.
+=item * The 'variant/gene_name' can either be the name of one or more columns
+from the --glm-clinical-data-file, or the name of one or more mutated gene
+names from the MAF, separated by "|". If this column is left blank, or instead
+contains "NA", then each column from either the variant mutation matrix
+(--use-maf-in-glm) or alternatively the --glm-clinical-data-file is used
+consecutively as the variant column in independent analyses.
 
 =item * 'covariates' are the names of one or more columns from the --glm-clinical-data-file, separated by "+".
 
@@ -236,7 +250,11 @@ The GLM analysis accepts a mixed numeric and categoric clinical data file, input
 
 =back
 
-GLM analysis may be performed using solely the data input into --glm-clinical-data-file, as described above, or alternatively, mutational data from the MAF may be included as variants in the GLM analysis, as also described above. Use the --use-maf-in-glm flag to include the mutation matrix derived from the maf as variant data.
+GLM analysis may be performed using solely the data input into
+--glm-clinical-data-file, as described above, or alternatively, mutational data
+from the MAF may be included as variants in the GLM analysis, as also described
+above. Use the --use-maf-in-glm flag to include the mutation matrix derived
+from the maf as variant data.
 
 Note that all input files for both correlation and GLM analysis must be tab-separated.
 
