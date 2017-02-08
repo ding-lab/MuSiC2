@@ -92,6 +92,9 @@ Intall Test::Most module
         wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
         cpanm Test-Most-0.34.tar.gz
 
+Intall Statistics::Descriptive module
+        cpanm Statistics::Descriptive
+
 Install MuSiC2 package
         
         git clone https://github.com/ding-lab/MuSiC2
