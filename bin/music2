@@ -15,7 +15,7 @@ use TGI::MuSiC2::Bmr;
 use TGI::MuSiC2::Smg;
 use TGI::MuSiC2::Dendrix;
 #use TGI::MuSiC2::Survival;
-#use TGI::MuSiC2::ClinicalCorrelation;
+use TGI::MuSiC2::ClinicalCorrelation;
 
 my $sub_cmd = shift;
 my %cmds = map{ 
@@ -50,7 +50,7 @@ SWITCH:{
     $sub_cmd eq 'dendrix' && do { TGI::MuSiC2::Dendrix->new(); last SWITCH; };
 #    $sub_cmd eq 'survival' && do { TGI::MuSiC2::Survival->new(); last SWITCH; };
 
-#    $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
+    $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
     #
     ##
     $sub_cmd eq 'help'   && do { die help_text(); last SWITCH; };
@@ -60,7 +60,7 @@ sub help_text {
         return <<HELP        
 Program: music2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2.
 Version: $VERSION
-Author: Beifang Niu && Cyriac Kandoth
+Author: Beifang Niu && Cyriac Kandoth && Matthew Wyczalkowski
 Usage:   music2 <command> [options]
 
 Key commands:
@@ -97,6 +97,8 @@ HELP
 }
 
 1;
+
+# Perl POD stuff: https://juerd.nl/site.plp/perlpodtut
 
 __END__
  

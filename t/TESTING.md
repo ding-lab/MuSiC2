@@ -8,4 +8,12 @@
 * [Dr. Dobbs article about testing](http://www.drdobbs.com/web-development/automated-testing-with-the-perl-test-mod/184416061)
 * [Test driven development](theory)
 
+## Testing
+
+`perl foo.t`
+
+or
+
+`prove -lr t`
+
 

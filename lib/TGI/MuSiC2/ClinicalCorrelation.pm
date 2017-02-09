@@ -8,26 +8,31 @@ use POSIX qw( WIFEXITED );
 use Getopt::Long;
 use File::Temp qw/ tempfile /;
 
+
+# Use Smg.pm as model for MuSiC2 patterns
+# this seems like boilerplate...
 sub new {
     my $class = shift;
     my $this = {};
 
-    $this->{_GENE_MR_FILE} = undef;
-    $this->{_OUTPUT_FILE}  = undef;
-    $this->{_MAX_FDR} = 0.2;
-    $this->{_SKIP_LOW_MR_GENES} = 1;
-    $this->{NO_SKIP_LOW_MR_GENES} = 0;
-    $this->{_DOWNSAMPLE_LARGE_GENES} = 0;
-    $this->{NO_DOWNSAMPLE_LARGE_GENES} = 1;
-    $this->{_SKIP_NON_EXPRESSED_GENES} = 1;
-    $this->{NO_SKIP_NON_EXPRESSED_GENES} = 0;
-    $this->{_SKIP_PSEUDOGENES} = 1;
-    $this->{NO_SKIP_PSEUDOGENES} = 0;
+    print("ClinicalCorrelation development version\n");
 
-    $this->{_BMR_MODIFIER_FILE} = undef;
-    $this->{_BLACK_GENE_LIST_FILE} = undef;
-    $this->{_PROCESSORS} = 1;
-    $this->{_QQ_PLOT_FILE} = "smg_test_qq_plot.pdf";
+# this updated
+    $this->{BAM_LIST} = undef;
+    $this->{MAF_FILE} = undef;
+    $this->{OUTPUT_FILE} = undef;
+    $this->{CLINICAL_CORRELATION_MATRIX_FILE} = undef;
+    $this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE} = undef;
+    $this->{GENETIC_DATA_TYPE} = "gene";
+    $this->{NUMERIC_CLINICAL_DATA_FILE} = undef;
+    $this->{NUMERICAL_DATA_TEST_METHOD} = 'wilcox';
+    $this->{CATEGORICAL_CLINICAL_DATA_FILE} = undef;
+    $this->{GLM_MODEL_FILE} = undef;
+    $this->{GLM_CLINICAL_DATA_FILE} = undef;
+    $this->{USE_MAF_IN_GLM} = 0;
+    $this->{SKIP_NON_CODING} = 1;
+    $this->{SKIP_SILENT} = 1;
+    $this->{SKIP_CORRELATION} = 0;
 
     bless $this, $class;
     $this->process();
@@ -39,28 +44,29 @@ sub process {
     my $this = shift;
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
-    $options = GetOptions (
-        'gene-mr-file=s'             => \$this->{_GENE_MR_FILE},
-        'output-file=s'              => \$this->{_OUTPUT_FILE},
-        'max-fdr=f'                  => \$this->{_MAX_FDR},
-        'skip-low-mr-genes'          => \$this->{_SKIP_LOW_MR_GENES},
-        'noskip-low-mr-genes'        => \$this->{NO_SKIP_LOW_MR_GENES},
-        'skip-non-expressed-genes'   => \$this->{_SKIP_NON_EXPRESSED_GENES},
-        'noskip-non-expressed-genes' => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
-        'skip-pseudogenes'           => \$this->{_SKIP_},
-        'noskip-pseudogenes'         => \$this->{NO_SKIP_NON_EXPRESSED_GENES},
-
-        'downsample-large-genes'     => \$this->{_DOWNSAMPLE_LARGE_GENES},
-        'nodownsample-large-genes'   => \$this->{NO_DOWNSAMPLE_LARGE_GENES},
-        'bmr-modifier-file=s'        => \$this->{_BMR_MODIFIER_FILE},
-        'black-gene-list-file=s'     => \$this->{_BLACK_GENE_LIST_FILE},
-        'processors=i'               => \$this->{_PROCESSORS},
-        'qq-plot-file=s'             => \$this->{_QQ_PLOT_FILE},
-
+    $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
+        'bam_list=s'                                => \$this->{BAM_LIST},
+        'maf_file=s'                                => \$this->{MAF_FILE},
+        'output_file=s'                             => \$this->{OUTPUT_FILE},
+        'clinical_correlation_matrix_file=s'        => \$this->{CLINICAL_CORRELATION_MATRIX_FILE},
+        'input_clinical_correlation_matrix_file=s'  => \$this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE},
+        'genetic_data_type=s'                       => \$this->{GENETIC_DATA_TYPE},
+        'numeric_clinical_data_file=s'              => \$this->{NUMERIC_CLINICAL_DATA_FILE},
+        'numerical_data_test_method=s'              => \$this->{NUMERICAL_DATA_TEST_METHOD},
+        'categorical_clinical_data_file=s'          => \$this->{CATEGORICAL_CLINICAL_DATA_FILE},
+        'glm_model_file=s'                          => \$this->{GLM_MODEL_FILE},
+        'glm_clinical_data_file=s'                  => \$this->{GLM_CLINICAL_DATA_FILE},
+        'use_maf_in_glm'                            => \$this->{USE_MAF_IN_GLM},
+        'skip_non_coding'                           => \$this->{SKIP_NON_CODING},
+        'skip_silent'                               => \$this->{SKIP_SILENT},
+        'skip_correlation'                          => \$this->{SKIP_CORRELATION},
         'help' => \$help,
     );
+
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
+
+
     #### processing ####
     # Check on all the input data
     my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
@@ -68,21 +74,8 @@ sub process {
     print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
     return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
     # Check boolean paras
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### /boilerplate
+}
 
 
 # TODO, by MAW.  
@@ -92,209 +85,8 @@ sub process {
 # These steps should be separate from the user's point of view; keeping them together leads to unnecessary
 # parameters and complicated logic.
 
-class Genome::Model::Tools::Music::ClinicalCorrelation {
-    is => 'Genome::Model::Tools::Music::Base',
-    has_input => [
-        bam_list => {
-            is => 'Text', , is_optional => 1, # this is optional if mutation matrix is supplied.
-            doc => "Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam] (See Description)",
-        },
-        maf_file => {
-            is => 'Text', is_optional => 1,
-            doc => "List of mutations using TCGA MAF specification v2.3",
-        },
-        output_file => {
-            is_output => 1, is => 'Text',
-            doc => "Results of clinical-correlation tool. Will have suffix added for data type",
-        },
-        clinical_correlation_matrix_file => {
-            is => 'Text', is_optional => 1,
-            doc => "Specify a file to store the sample-vs-gene matrix created during calculations",
-        },
-        input_clinical_correlation_matrix_file => {
-            is => 'Text', is_optional => 1,
-            doc => "Instead of creating this from the MAF, input the sample-vs-gene matrix for calculations",
-        },
-        genetic_data_type => {
-            is => 'Text', is_optional => 1, default => "gene",
-            doc => "Correlate clinical data to \"gene\" or \"variant\" level data",
-        },
-        numeric_clinical_data_file => {
-            is => 'Text', is_optional => 1,
-            doc => "Table of samples (y) vs. numeric clinical data category (x)",
-        },
-        numerical_data_test_method => {
-            is => 'Text', is_optional => 1, default => 'wilcox',
-            doc => "Either 'cor' for Pearson Correlation or 'wilcox' for the Wilcoxon Rank-Sum Test for numerical clinical data",
-        },
-        categorical_clinical_data_file => {
-            is => 'Text', is_optional => 1,
-            doc => "Table of samples (y) vs. categorical clinical data category (x)",
-        },
-        glm_model_file => {
-            is => 'Text', is_optional => 1,
-            doc => "File outlining the type of model, response variable, covariants, etc. for the GLM analysis. (See DESCRIPTION)",
-        },
-        glm_clinical_data_file => {
-            is => 'Text', is_optional => 1,
-            doc => "Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)",
-        },
-        use_maf_in_glm => {
-            is => 'Boolean', is_optional => 1, default => 0,
-            doc => "Create a variant matrix from the MAF file as variant input to GLM analysis.",
-        },
-        skip_non_coding => {
-            is => 'Boolean', is_optional => 1, default => 1,
-            doc => "Skip non-coding mutations from the provided MAF file",
-        },
-        skip_silent => {
-            is => 'Boolean', is_optional => 1, default => 1,
-            doc => "Skip silent mutations from the provided MAF file",
-        },
-        skip_correlation => {  # MAW. Create mutation matrix file, but don't run R code.
-            is => 'Boolean', is_optional => 1, default => 0,
-            doc => "Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file",
-        },
-    ],
-    doc => "Correlate phenotypic traits against mutated genes, or against individual variants",
-};
 
-sub help_synopsis {
-    return <<HELP
- ... music clinical-correlation \\
-        --bam-list /path/myBamList.tsv \\
-        --maf-file /path/myMAF.tsv \\
-        --numeric-clinical-data-file /path/myNumericData.tsv \\
-        --genetic-data-type 'gene' \\
-        --output-file /path/output_file
-
- ... music clinical-correlation \\
-        --maf-file /path/myMAF.tsv \\
-        --bam-list /path/myBamList.tsv \\
-        --numeric-clinical-data-file /path/myNumericData.tsv \\
-        --categorical-clinical-data-file /path/myClassData.tsv \\
-        --genetic-data-type 'gene' \\
-        --output-file /path/output_file
-
- ... music clinical-correlation \\
-        --maf-file /path/myMAF.tsv \\
-        --bam-list /path/myBamList.tsv \\
-        --output-file /path/output_file \\
-        --glm-model-file /path/model.tsv \\
-        --glm-clinical-data-file /path/glm_clinical_data.tsv \\
-        --use-maf-in-glm
-
-HELP
-}
-
-sub help_detail {
-    return <<HELP
-
-This command relates clinical traits and mutational data. Either one can
-perform correlation analysis between mutations recorded in a MAF and the
-particular phenotypic traits recorded in clinical data files for the same
-samples, or one can run a generalized linear model (GLM) analysis on the same
-types of data.
-
-The clinical data files for correlation must be separated between numeric and
-categoric data and must follow these conventions:
-
-=over 4
-
-=item * Headers are required
-
-=item * Each file must include at least 1 sample_id column and 1 attribute column, with the format being [sample_id  clinical_data_attribute_1 clinical_data_attribute_2 ...]
-
-=item * The sample ID must match the sample ID listed in the MAF under "Tumor_Sample_Barcode" for relating the mutations of this sample.
-
-=back
-
-Note the importance of the headers: the header for each clinical_data_attribute will appear in the
-output file to denote relationships with the mutation data from the MAF.
-
-Internally, the input data is fed into an R script which calculates a P-value representing the
-probability that the correlation seen between the mutations in each gene (or variant) and each
-phenotype trait are random. Lower P-values indicate lower randomness, or likely true correlations.
-
-The results are saved to the output filename given with a suffix appended; ".numeric.tsv" will be
-appended for results derived from numeric clinical data, and ".categorical.tsv" will be appended for results
-derived from categorical clinical data. Also, ".glm.tsv" will be appended to the output filename for GLM results.
-
-The GLM analysis accepts a mixed numeric and categoric clinical data file,
-input using the parameter --glm-clinical-data-file. GLM clinical data must
-adhere to the formats described above for the correlation clinical data files.
-GLM also requires the user to input a --glm-model-file. This file requires
-specific headers and defines the analysis to be performed rather exactly. Here
-are the conventions required for this file:
-
-=over 4
-
-=item * Columns must be ordered as such:
-
-=item [ analysis_type    clinical_data_trait_name    variant/gene_name   covariates  memo ]
-
-=item * The 'analysis_type' column must contain either "Q", indicating a quantative trait, or "B", indicating a binary trait will be examined.
-
-=item * The 'clinical_data_trait_name' is the name of a clinical data trait defined by being a header in the --glm-clinical-data-file.
-
-=item * The 'variant/gene_name' can either be the name of one or more columns
-from the --glm-clinical-data-file, or the name of one or more mutated gene
-names from the MAF, separated by "|". If this column is left blank, or instead
-contains "NA", then each column from either the variant mutation matrix
-(--use-maf-in-glm) or alternatively the --glm-clinical-data-file is used
-consecutively as the variant column in independent analyses.
-
-=item * 'covariates' are the names of one or more columns from the --glm-clinical-data-file, separated by "+".
-
-=item * 'memo' is any note deemed useful to the user. It will be printed in the output data file for reference.
-
-=back
-
-GLM analysis may be performed using solely the data input into
---glm-clinical-data-file, as described above, or alternatively, mutational data
-from the MAF may be included as variants in the GLM analysis, as also described
-above. Use the --use-maf-in-glm flag to include the mutation matrix derived
-from the maf as variant data.
-
-Note that all input files for both correlation and GLM analysis must be tab-separated.
-
-HELP
-}
-
-sub _additional_help_sections {
-    return (
-    "ARGUMENTS",
-<<EOS
-
-=over 4
-
-=item --bam-list
-
-=over 8
-
-=item Provide a file containing sample names and normal/tumor BAM locations for each. Use the tab-
-  delimited format [sample_name normal_bam tumor_bam] per line. This tool only needs sample_name,
-  so all other columns can be skipped. The sample_name must be the same as the tumor sample names
-  used in the MAF file (16th column, with the header Tumor_Sample_Barcode).
-
-=back
-
-=back
-
-=cut
-
-EOS
-    );
-}
-
-sub _doc_authors {
-    return <<EOS
- Nathan D. Dees, Ph.D.
- Qunyuan Zhang, Ph.D.
- William Schierding, M.S.
-EOS
-}
-
+### Continue here
 sub execute {
 
     # parse input arguments
@@ -499,7 +291,7 @@ sub create_sample_gene_matrix_gene {
     }
 
     return $output_matrix;
-}
+} # create_sample_gene_matrix_gene 
 
 sub create_sample_gene_matrix_variant {
 
@@ -595,6 +387,235 @@ sub create_sample_gene_matrix_variant {
     }
 
     return $output_matrix;
+}   # create_sample_gene_matrix_variant 
+
+
+##### GMS Documentation #####
+# class Genome::Model::Tools::Music::ClinicalCorrelation {
+#     is => 'Genome::Model::Tools::Music::Base',
+#     has_input => [
+#         bam_list => {
+#             is => 'Text', , is_optional => 1, # this is optional if mutation matrix is supplied.
+#             doc => "Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam] (See Description)",
+#         },
+#         maf_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "List of mutations using TCGA MAF specification v2.3",
+#         },
+#         output_file => {
+#             is_output => 1, is => 'Text',
+#             doc => "Results of clinical-correlation tool. Will have suffix added for data type",
+#         },
+#         clinical_correlation_matrix_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "Specify a file to store the sample-vs-gene matrix created during calculations",
+#         },
+#         input_clinical_correlation_matrix_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "Instead of creating this from the MAF, input the sample-vs-gene matrix for calculations",
+#         },
+#         genetic_data_type => {
+#             is => 'Text', is_optional => 1, default => "gene",
+#             doc => "Correlate clinical data to \"gene\" or \"variant\" level data",
+#         },
+#         numeric_clinical_data_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "Table of samples (y) vs. numeric clinical data category (x)",
+#         },
+#         numerical_data_test_method => {
+#             is => 'Text', is_optional => 1, default => 'wilcox',
+#             doc => "Either 'cor' for Pearson Correlation or 'wilcox' for the Wilcoxon Rank-Sum Test for numerical clinical data",
+#         },
+#         categorical_clinical_data_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "Table of samples (y) vs. categorical clinical data category (x)",
+#         },
+#         glm_model_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "File outlining the type of model, response variable, covariants, etc. for the GLM analysis. (See DESCRIPTION)",
+#         },
+#         glm_clinical_data_file => {
+#             is => 'Text', is_optional => 1,
+#             doc => "Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)",
+#         },
+#         use_maf_in_glm => {
+#             is => 'Boolean', is_optional => 1, default => 0,
+#             doc => "Create a variant matrix from the MAF file as variant input to GLM analysis.",
+#         },
+#         skip_non_coding => {
+#             is => 'Boolean', is_optional => 1, default => 1,
+#             doc => "Skip non-coding mutations from the provided MAF file",
+#         },
+#         skip_silent => {
+#             is => 'Boolean', is_optional => 1, default => 1,
+#             doc => "Skip silent mutations from the provided MAF file",
+#         },
+#         skip_correlation => {  # MAW. Create mutation matrix file, but don't run R code.
+#             is => 'Boolean', is_optional => 1, default => 0,
+#             doc => "Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file",
+#         },
+#     ],
+#     doc => "Correlate phenotypic traits against mutated genes, or against individual variants",
+# };
+# 
+# 
+
+
+# MuSiC2 help
+# taken from Smg.pm
+
+sub help_text {
+    my $this = shift;
+        return <<HELP
+
+USAGE (OLD)
+ music2 smg --gene-mr-file=? --output-file=? [--max-fdr=?] [--skip-low-mr-genes]
+    [--downsample-large-genes] [--bmr-modifier-file=?] [--processors=?]
+
+SYNOPSIS (UPDATED, may want to delete non-GLM tests)
+ music2 clinical-correlation \\  # Numeric test
+        --bam-list /path/myBamList.tsv \\
+        --maf-file /path/myMAF.tsv \\
+        --numeric-clinical-data-file /path/myNumericData.tsv \\
+        --genetic-data-type 'gene' \\
+        --output-file /path/output_file
+
+ musics clinical-correlation \\  # Categorical test
+        --maf-file /path/myMAF.tsv \\
+        --bam-list /path/myBamList.tsv \\
+        --numeric-clinical-data-file /path/myNumericData.tsv \\
+        --categorical-clinical-data-file /path/myClassData.tsv \\
+        --genetic-data-type 'gene' \\
+        --output-file /path/output_file
+
+ music2 clinical-correlation \\  # GLM test
+        --maf-file /path/myMAF.tsv \\
+        --bam-list /path/myBamList.tsv \\
+        --output-file /path/output_file \\
+        --glm-model-file /path/model.tsv \\
+        --glm-clinical-data-file /path/glm_clinical_data.tsv \\
+        --use-maf-in-glm
+
+REQUIRED INPUTS 
+  output_file 
+    Results of clinical-correlation tool. Will have suffix added for data type
+
+OPTIONAL INPUTS 
+    bam_list 
+        Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam], optional if mutation matrix is supplied. (See Description)
+    maf_file 
+        List of mutations using TCGA MAF specification v2.3
+    clinical_correlation_matrix_file 
+        Specify a file to store the sample-vs-gene matrix created during calculations
+    input_clinical_correlation_matrix_file 
+        Instead of creating this from the MAF, input the sample-vs-gene matrix for calculations
+    genetic_data_type 
+        Correlate clinical data to "gene" or "variant" level data.  Default "gene"
+    numeric_clinical_data_file 
+        Table of samples (y) vs. numeric clinical data category (x)
+    numerical_data_test_method 
+        Either 'cor' for Pearson Correlation or 'wilcox' for the Wilcoxon Rank-Sum Test for numerical clinical data.  Default 'wilcox',
+    categorical_clinical_data_file 
+        Table of samples (y) vs. categorical clinical data category (x)
+    glm_model_file 
+        File outlining the type of model, response variable, covariants, etc. for the GLM analysis. (See DESCRIPTION)
+    glm_clinical_data_file 
+        Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)
+    use_maf_in_glm 
+        Create a variant matrix from the MAF file as variant input to GLM analysis.  
+        Default value 'false' if not specified
+    skip_non_coding 
+        Skip non-coding mutations from the provided MAF file. 
+        Default value 'true' if not specified
+    skip_silent 
+        Skip silent mutations from the provided MAF file.  
+        Default value 'true' if not specified
+    skip_correlation 
+        Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file.  
+        Default value 'false' if not specified
+
+DESCRIPTION
+    This command relates clinical traits and mutational data. Either one can
+    perform correlation analysis between mutations recorded in a MAF and the
+    particular phenotypic traits recorded in clinical data files for the same
+    samples, or one can run a generalized linear model (GLM) analysis on the same
+    types of data.
+
+    The clinical data files for correlation must be separated between numeric and
+    categoric data and must follow these conventions:
+        * Headers are required
+        * Each file must include at least 1 sample_id column and 1 attribute
+          column, with the format being [sample_id  clinical_data_attribute_1
+          clinical_data_attribute_2 ...]
+        * The sample ID must match the sample ID listed in the MAF under
+          "Tumor_Sample_Barcode" for relating the mutations of this sample.
+
+    Note the importance of the headers: the header for each clinical_data_attribute
+    will appear in the output file to denote relationships with the mutation data
+    from the MAF.
+
+    Internally, the input data is fed into an R script which calculates a
+    P-value representing the probability that the correlation seen between the
+    mutations in each gene (or variant) and each phenotype trait are random. Lower
+    P-values indicate lower randomness, or likely true correlations.
+
+    The results are saved to the output filename given with a suffix appended;
+    ".numeric.tsv" will be appended for results derived from numeric clinical data,
+    and ".categorical.tsv" will be appended for results derived from categorical
+    clinical data. Also, ".glm.tsv" will be appended to the output filename for GLM
+    results.
+
+    The GLM analysis accepts a mixed numeric and categoric clinical data file,
+    input using the parameter --glm-clinical-data-file. GLM clinical data must
+    adhere to the formats described above for the correlation clinical data files.
+    GLM also requires the user to input a --glm-model-file. This file requires
+    specific headers and defines the analysis to be performed rather exactly. Here
+    are the conventions required for this file:
+
+    * Columns must be ordered as such:
+    [ analysis_type    clinical_data_trait_name    variant/gene_name   covariates  memo ]
+
+    * The 'analysis_type' column must contain either "Q", indicating a
+      quantative trait, or "B", indicating a binary trait will be examined.
+
+    * The 'clinical_data_trait_name' is the name of a clinical data trait
+      defined by being a header in the --glm-clinical-data-file.
+
+    * The 'variant/gene_name' can either be the name of one or more columns
+      from the --glm-clinical-data-file, or the name of one or more mutated gene
+      names from the MAF, separated by "|". If this column is left blank, or instead
+      contains "NA", then each column from either the variant mutation matrix
+      (--use-maf-in-glm) or alternatively the --glm-clinical-data-file is used
+      consecutively as the variant column in independent analyses.
+
+    * 'covariates' are the names of one or more columns from the
+      --glm-clinical-data-file, separated by "+".
+
+    * 'memo' is any note deemed useful to the user. It will be printed in the
+      output data file for reference.
+
+    GLM analysis may be performed using solely the data input into
+    --glm-clinical-data-file, as described above, or alternatively, mutational data
+    from the MAF may be included as variants in the GLM analysis, as also described
+    above. Use the --use-maf-in-glm flag to include the mutation matrix derived
+    from the maf as variant data.
+
+    Note that all input files for both correlation and GLM analysis must be tab-separated.
+
+
+ARGUMENTS
+
+    --bam-list
+
+    Provide a file containing sample names and normal/tumor BAM locations for each.
+    Use the tab- delimited format [sample_name normal_bam tumor_bam] per line. This
+    tool only needs sample_name, so all other columns can be skipped. The
+    sample_name must be the same as the tumor sample names used in the MAF file
+    (16th column, with the header Tumor_Sample_Barcode).
+
+HELP
+
 }
 
 1;
+
