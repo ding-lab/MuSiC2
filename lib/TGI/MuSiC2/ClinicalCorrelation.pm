@@ -66,27 +66,16 @@ sub process {
     unless( $options ) { die $this->usage_text(); }
 
 
-#    #### processing ####
-#    # Check on all the input data
-#    my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
-#    # Check on all the input data before starting work
-#    print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
-#    return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
-#    # Check boolean paras
-
-# }  # end of boilerplate process()
-
-
 # TODO, by MAW.  
+
 # Separating GLM and non-glm functionality would be easier for software maintenance and usability,
 # since these functionalities have little in common.
+
 # For GLM, workflow should be 1) create mutation matrix file from MAF and 2) perform correlation.
 # These steps should be separate from the user's point of view; keeping them together leads to unnecessary
 # parameters and complicated logic.
 
-
-### Continue here
-# sub execute {  # execute() from GMS
+# break up the logic into more manageable and testable pieces
 
 # conversion GMS -> MuSiC2
 # * convert $self to $this
