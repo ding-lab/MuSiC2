@@ -10,7 +10,6 @@ use File::Temp qw/ tempfile /;
 
 
 # Use Smg.pm as model for MuSiC2 patterns
-# this seems like boilerplate...
 sub new {
     my $class = shift;
     my $this = {};
@@ -30,8 +29,8 @@ sub new {
     $this->{GLM_MODEL_FILE} = undef;
     $this->{GLM_CLINICAL_DATA_FILE} = undef;
     $this->{USE_MAF_IN_GLM} = 0;
-    $this->{SKIP_NON_CODING} = 1;
-    $this->{SKIP_SILENT} = 1;
+    $this->{SKIP_NON_CODING} = 0;  
+    $this->{SKIP_SILENT} = 0;
     $this->{SKIP_CORRELATION} = 0;
 
     bless $this, $class;
@@ -45,37 +44,37 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
-        'bam_list=s'                                => \$this->{BAM_LIST},
-        'maf_file=s'                                => \$this->{MAF_FILE},
-        'output_file=s'                             => \$this->{OUTPUT_FILE},
-        'clinical_correlation_matrix_file=s'        => \$this->{CLINICAL_CORRELATION_MATRIX_FILE},
-        'input_clinical_correlation_matrix_file=s'  => \$this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE},
-        'genetic_data_type=s'                       => \$this->{GENETIC_DATA_TYPE},
-        'numeric_clinical_data_file=s'              => \$this->{NUMERIC_CLINICAL_DATA_FILE},
-        'numerical_data_test_method=s'              => \$this->{NUMERICAL_DATA_TEST_METHOD},
-        'categorical_clinical_data_file=s'          => \$this->{CATEGORICAL_CLINICAL_DATA_FILE},
-        'glm_model_file=s'                          => \$this->{GLM_MODEL_FILE},
-        'glm_clinical_data_file=s'                  => \$this->{GLM_CLINICAL_DATA_FILE},
-        'use_maf_in_glm'                            => \$this->{USE_MAF_IN_GLM},
-        'skip_non_coding'                           => \$this->{SKIP_NON_CODING},
-        'skip_silent'                               => \$this->{SKIP_SILENT},
-        'skip_correlation'                          => \$this->{SKIP_CORRELATION},
+        'bam-list=s'                                => \$this->{BAM_LIST},
+        'maf-file=s'                                => \$this->{MAF_FILE},
+        'output-file=s'                             => \$this->{OUTPUT_FILE},
+        'clinical-correlation-matrix-file=s'        => \$this->{CLINICAL_CORRELATION_MATRIX_FILE},
+        'input-clinical-correlation-matrix-file=s'  => \$this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE},
+        'genetic-data-type=s'                       => \$this->{GENETIC_DATA_TYPE},
+        'numeric-clinical-data-file=s'              => \$this->{NUMERIC_CLINICAL_DATA_FILE},
+        'numerical-data-test-method=s'              => \$this->{NUMERICAL_DATA_TEST_METHOD},
+        'categorical-clinical-data-file=s'          => \$this->{CATEGORICAL_CLINICAL_DATA_FILE},
+        'glm-model-file=s'                          => \$this->{GLM_MODEL_FILE},
+        'glm-clinical-data-file=s'                  => \$this->{GLM_CLINICAL_DATA_FILE},
+        'use-maf-in-glm'                            => \$this->{USE_MAF_IN_GLM},
+        'skip-non-coding'                           => \$this->{SKIP_NON_CODING},
+        'skip-silent'                               => \$this->{SKIP_SILENT},
+        'skip-correlation'                          => \$this->{SKIP_CORRELATION},
         'help' => \$help,
     );
 
     if ( $help ) { print STDERR help_text(); exit 0; }
-    unless( $options ) { die $this->help_text(); }
+    unless( $options ) { die $this->usage_text(); }
 
 
-    #### processing ####
-    # Check on all the input data
-    my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
-    # Check on all the input data before starting work
-    print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
-    return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
-    # Check boolean paras
-### /boilerplate
-}
+#    #### processing ####
+#    # Check on all the input data
+#    my $output_file_detailed = $this->{_OUTPUT_FILE} . "_detailed";
+#    # Check on all the input data before starting work
+#    print STDERR "Gene mutation rate file not found or is empty: $this->{_GENE_MR_FILE}\n" unless( -s $this->{_GENE_MR_FILE} );
+#    return undef unless( -s $this->{_GENE_MR_FILE} && ( !defined $this->{_BMR_MODIFIER_FILE} || -s $this->{_BMR_MODIFIER_FILE} ));
+#    # Check boolean paras
+
+# }  # end of boilerplate process()
 
 
 # TODO, by MAW.  
@@ -87,32 +86,38 @@ sub process {
 
 
 ### Continue here
-sub execute {
+# sub execute {  # execute() from GMS
+
+# conversion GMS -> MuSiC2
+# * convert $self to $this
+# * error_message is {warn(""); return}
+# * debug_message is {warn(""); next}
+# * WIFEXITED is a wrapper around system calls (unchanged from GMS)
+# * Errors (e.g. file open) trigger a die()
 
     # parse input arguments
-    my $self = shift;
-    my $bam_list = $self->bam_list;
-    my $output_file = $self->output_file;
-    my $genetic_data_type = $self->genetic_data_type;
+    my $bam_list = $this->{BAM_LIST};
+    my $output_file = $this->{OUTPUT_FILE};
+    my $genetic_data_type = $this->{GENETIC_DATA_TYPE};
 
     # check genetic data type
     unless( $genetic_data_type =~ /^gene|variant$/i ) {
-        $self->error_message("Please enter either \"gene\" or \"variant\" for the --genetic-data-type parameter.");
+        warn("Please enter either \"gene\" or \"variant\" for the --genetic-data-type parameter.");
         return;
     }
 
     # load clinical data and analysis types
     my %clinical_data;
-    if( $self->numeric_clinical_data_file ) {
-        $clinical_data{'numeric'} = $self->numeric_clinical_data_file;
+    if( $this->{NUMERIC_CLINICAL_DATA_FILE} ) {
+        $clinical_data{'numeric'} = $this->{NUMERIC_CLINICAL_DATA_FILE};
     }
-    if( $self->categorical_clinical_data_file ) {
-        $clinical_data{'categ'} = $self->categorical_clinical_data_file;
+    if( $this->{CATEGORICAL_CLINICAL_DATA_FILE} ) {
+        $clinical_data{'categ'} = $this->{CATEGORICAL_CLINICAL_DATA_FILE};
     }
-    if( $self->glm_clinical_data_file ) {
-        $clinical_data{'glm'} = $self->glm_clinical_data_file;
+    if( $this->{GLM_CLINICAL_DATA_FILE} ) {
+        $clinical_data{'glm'} = $this->{GLM_CLINICAL_DATA_FILE};
     }
-    my $glm_model = $self->glm_model_file;
+    my $glm_model = $this->{GLM_MODEL_FILE};
 
     # declarations
     my @all_sample_names; # names of all the samples, no matter if it's mutated or not
@@ -139,7 +144,7 @@ sub execute {
         # MAW why is the option to run any combination of these important?  Good place to split GLM and non-GLM
         if( $datatype =~ /numeric/i ) {
             $full_output_filename = $output_file . ".numeric.tsv";
-            $test_method = $self->numerical_data_test_method;
+            $test_method = $this->{NUMERICAL_DATA_TEST_METHOD};
         }
 
         if( $datatype =~ /categ/i ) {
@@ -153,7 +158,7 @@ sub execute {
         }
 
         #read through clinical data file to see which samples are represented and create input matrix for R
-        # This section is not necessary if self->skip_correlation, and makes creating a mutation_matrix file annoying.
+        # This section is not necessary if this->skip_correlation, and makes creating a mutation_matrix file annoying.
         my %samples;
         my $matrix_file;
         my $samples = \%samples;
@@ -173,28 +178,28 @@ sub execute {
         # bam_list argument should be optional. -- really?  Empirially, content of bam_list changes nothing, but @all_sample_names is propagaged
         # Also, there are times when I want to create a matrix file and save it without doing processing.
         # This is currently not supported.
-        unless(( $datatype =~ /glm/i && !$self->use_maf_in_glm ) || $self->input_clinical_correlation_matrix_file ) {
+        unless(( $datatype =~ /glm/i && !$this->{USE_MAF_IN_GLM} ) || $this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE} ) {
 
             if( $genetic_data_type =~ /^gene$/i ) {
-                $matrix_file = $self->create_sample_gene_matrix_gene( $samples, $clinical_data{$datatype}, @all_sample_names );
+                $matrix_file = $this->create_sample_gene_matrix_gene( $samples, $clinical_data{$datatype}, @all_sample_names );
             }
             elsif( $genetic_data_type =~ /^variant$/i ) {
-                $matrix_file = $self->create_sample_gene_matrix_variant( $samples, $clinical_data{$datatype}, @all_sample_names );
+                $matrix_file = $this->create_sample_gene_matrix_variant( $samples, $clinical_data{$datatype}, @all_sample_names );
             }
             else {
-                $self->error_message( "Please enter either \"gene\" or \"variant\" for the --genetic-data-type parameter." );
+                warn( "Please enter either \"gene\" or \"variant\" for the --genetic-data-type parameter." );
                 return;
             }
         }
 
         # MAW want to have the option to exit loop here, after mutation matrix has been constructed and written to disk.
-        next if ( $self->skip_correlation );  # we want this to work in future
+        next if ( $this->{SKIP_CORRELATION} );  # we want this to work in future
         #warn("Skipping correlation, hard coded.");  # uncomment to stop after mutation matrix created
         #next;                                       # uncomment to stop after mutation matrix created
 
 
-        if( $self->input_clinical_correlation_matrix_file ) {
-            $matrix_file = $self->input_clinical_correlation_matrix_file;
+        if( $this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE} ) {
+            $matrix_file = $this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE};
         }
         unless( defined $matrix_file ) { $matrix_file = "'*'"; }
 
@@ -219,14 +224,14 @@ sub execute {
 sub create_sample_gene_matrix_gene {
 
     # NOTE - $clinical_data_file is unused.  Unnecessary argument.
-    my ( $self, $samples, $clinical_data_file, @all_sample_names ) = @_;
-    my $output_matrix = $self->clinical_correlation_matrix_file;
+    my ( $this, $samples, $clinical_data_file, @all_sample_names ) = @_;
+    my $output_matrix = $this->{clinical_correlation_matrix_file};  # Global
 
     #create a hash of mutations from the MAF file
     my ( %mutations, %all_genes, @all_genes );
 
     #parse the MAF file and fill up the mutation status hashes
-    my $maf_fh = IO::File->new( $self->maf_file ) or die "Couldn't open MAF file!\n";
+    my $maf_fh = IO::File->new( $this->{MAF_FILE} ) or die "Couldn't open MAF file!\n";
     while( my $line = $maf_fh->getline ) {
         next if( $line =~ m/^(#|Hugo_Symbol)/ );
         chomp $line;
@@ -235,7 +240,7 @@ sub create_sample_gene_matrix_gene {
 
         #check that the mutation class is valid
         if( $mutation_class !~ m/^(Missense_Mutation|Nonsense_Mutation|Nonstop_Mutation|Splice_Site|Translation_Start_Site|Frame_Shift_Del|Frame_Shift_Ins|In_Frame_Del|In_Frame_Ins|Silent|Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region|De_novo_Start_InFrame|De_novo_Start_OutOfFrame)$/ ) {
-            $self->error_message( "Unrecognized Variant_Classification \"$mutation_class\" in MAF file for gene $gene\nPlease use TCGA MAF v2.3.\n" );
+            warn( "Unrecognized Variant_Classification \"$mutation_class\" in MAF file for gene $gene\nPlease use TCGA MAF v2.3.\n" );
             return;
         }
 
@@ -249,8 +254,8 @@ sub create_sample_gene_matrix_gene {
 #        }
 
         # If user wants, skip Silent mutations, or those in Introns, RNA, UTRs, Flanks, IGRs, or the ubiquitous Targeted_Region
-        if(( $self->skip_non_coding && $mutation_class =~ m/^(Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region)$/ ) ||
-           ( $self->skip_silent && $mutation_class =~ m/^Silent$/ )) {
+        if(( $this->{SKIP_NON_CODING} && $mutation_class =~ m/^(Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region)$/ ) ||
+           ( $this->{SKIP_SILENT} && $mutation_class =~ m/^Silent$/ )) {
 #            print "Skipping $mutation_class mutation in gene $gene.\n";   # annoying - creates millions of useless lines
             next;
         }
@@ -296,14 +301,14 @@ sub create_sample_gene_matrix_gene {
 sub create_sample_gene_matrix_variant {
 
     # NOTE - $clinical_data_file is unused.  Unnecessary argument.
-    my ( $self, $samples, $clinical_data_file, @all_sample_names ) = @_;
-    my $output_matrix = $self->clinical_correlation_matrix_file;
+    my ( $this, $samples, $clinical_data_file, @all_sample_names ) = @_;
+    my $output_matrix = $this->{CLINICAL_CORRELATION_MATRIX_FILE};
 
     #create hash of mutations from the MAF file
     my ( %variants_hash, %all_variants );
 
     #parse the MAF file and fill up the mutation status hashes
-    my $maf_fh = IO::File->new( $self->maf_file ) or die "Couldn't open MAF file!\n";
+    my $maf_fh = IO::File->new( $this->{MAF_FILE} ) or die "Couldn't open MAF file!\n";
     while( my $line = $maf_fh->getline ) {
         next if( $line =~ m/^(#|Hugo_Symbol)/ );
         chomp $line;
@@ -312,7 +317,7 @@ sub create_sample_gene_matrix_variant {
 
         #check that the mutation class is valid
         if( $mutation_class !~ m/^(Missense_Mutation|Nonsense_Mutation|Nonstop_Mutation|Splice_Site|Translation_Start_Site|Frame_Shift_Del|Frame_Shift_Ins|In_Frame_Del|In_Frame_Ins|Silent|Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region|De_novo_Start_InFrame|De_novo_Start_OutOfFrame)$/ ) {
-            $self->error_message( "Unrecognized Variant_Classification \"$mutation_class\" in MAF file for gene $gene\nPlease use TCGA MAF v2.3.\n" );
+            warn( "Unrecognized Variant_Classification \"$mutation_class\" in MAF file for gene $gene\nPlease use TCGA MAF v2.3.\n" );
             return;
         }
 
@@ -322,8 +327,8 @@ sub create_sample_gene_matrix_variant {
         }
 
         # If user wants, skip Silent mutations, or those in Introns, RNA, UTRs, Flanks, IGRs, or the ubiquitous Targeted_Region
-        if(( $self->skip_non_coding && $mutation_class =~ m/^(Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region)$/ ) ||
-           ( $self->skip_silent && $mutation_class =~ m/^Silent$/ )) {
+        if(( $this->{SKIP_NON_CODING} && $mutation_class =~ m/^(Intron|RNA|3'Flank|3'UTR|5'Flank|5'UTR|IGR|Targeted_Region)$/ ) ||
+           ( $this->{SKIP_SILENT} && $mutation_class =~ m/^Silent$/ )) {
             print "Skipping $mutation_class mutation in gene $gene.\n";
             next;
         }
@@ -464,12 +469,12 @@ sub create_sample_gene_matrix_variant {
 # MuSiC2 help
 # taken from Smg.pm
 
-sub help_text {
+sub usage_text {
     my $this = shift;
         return <<HELP
 
 USAGE (OLD)
- music2 smg --gene-mr-file=? --output-file=? [--max-fdr=?] [--skip-low-mr-genes]
+ music2 clinical-correlation --gene-mr-file=? --output-file=? [--max-fdr=?] [--skip-low-mr-genes]
     [--downsample-large-genes] [--bmr-modifier-file=?] [--processors=?]
 
 SYNOPSIS (UPDATED, may want to delete non-GLM tests)
@@ -495,6 +500,19 @@ SYNOPSIS (UPDATED, may want to delete non-GLM tests)
         --glm-model-file /path/model.tsv \\
         --glm-clinical-data-file /path/glm_clinical_data.tsv \\
         --use-maf-in-glm
+
+SEE ALSO
+
+ music2 clinical-correlation --help for details.
+
+HELP
+}
+
+sub help_text {
+    my $this = shift;
+    my $usage = usage_text();
+
+    return $usage . <<HELP
 
 REQUIRED INPUTS 
   output_file 
