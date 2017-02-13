@@ -94,6 +94,7 @@ Intall Test::Most module
 
 Intall Statistics::Descriptive module
         cpanm Statistics::Descriptive
+        cpanm Statistics::Distributions
 
 Install MuSiC2 package
         

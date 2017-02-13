@@ -16,6 +16,7 @@ use TGI::MuSiC2::Smg;
 use TGI::MuSiC2::Dendrix;
 #use TGI::MuSiC2::Survival;
 use TGI::MuSiC2::ClinicalCorrelation;
+use TGI::MuSiC2::LongGeneFilter;
 
 my $sub_cmd = shift;
 my %cmds = map{ 
@@ -26,6 +27,7 @@ my %cmds = map{
       cosmic-omim 
       create-visualizations 
       data 
+      long-gene-filter
       mutation-relation 
       path-scan 
       pfam 
@@ -51,6 +53,7 @@ SWITCH:{
 #    $sub_cmd eq 'survival' && do { TGI::MuSiC2::Survival->new(); last SWITCH; };
 
     $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
+    $sub_cmd eq 'long-gene-filter' && do { TGI::MuSiC2::LongGeneFilter->new(); last SWITCH; };
     #
     ##
     $sub_cmd eq 'help'   && do { die help_text(); last SWITCH; };
@@ -76,6 +79,8 @@ create-visualizations       no description!!!: define doc in the class definitio
                              Genome::Model::Tools::Music::CreateVisualizations
 data                   ...  Parse, standardize, and index various third-party datasets  
                              used by the tools in MuSiC.
+long-gene-filter            Find conditions for which significance status is no longer 
+                            related to gene size 
 mutation-relation           Identify relationships of mutation concurrency or mutual    
                              exclusivity in genes across cases.
 path-scan                   Find signifcantly mutated pathways in a cohort given a list 

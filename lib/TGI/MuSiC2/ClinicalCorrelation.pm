@@ -29,8 +29,8 @@ sub new {
     $this->{GLM_MODEL_FILE} = undef;
     $this->{GLM_CLINICAL_DATA_FILE} = undef;
     $this->{USE_MAF_IN_GLM} = 0;
-    $this->{SKIP_NON_CODING} = 0;  
-    $this->{SKIP_SILENT} = 0;
+    $this->{SKIP_NON_CODING} = 1;  
+    $this->{SKIP_SILENT} = 1;
     $this->{SKIP_CORRELATION} = 0;
 
     bless $this, $class;
@@ -38,6 +38,7 @@ sub new {
 
     return $this;
 }
+
 
 sub process {
     my $this = shift;
@@ -55,10 +56,10 @@ sub process {
         'categorical-clinical-data-file=s'          => \$this->{CATEGORICAL_CLINICAL_DATA_FILE},
         'glm-model-file=s'                          => \$this->{GLM_MODEL_FILE},
         'glm-clinical-data-file=s'                  => \$this->{GLM_CLINICAL_DATA_FILE},
-        'use-maf-in-glm'                            => \$this->{USE_MAF_IN_GLM},
-        'skip-non-coding'                           => \$this->{SKIP_NON_CODING},
-        'skip-silent'                               => \$this->{SKIP_SILENT},
-        'skip-correlation'                          => \$this->{SKIP_CORRELATION},
+        'use-maf-in-glm=!'                          => \$this->{USE_MAF_IN_GLM},
+        'skip-non-coding=!'                         => \$this->{SKIP_NON_CODING},
+        'skip-silent=!'                             => \$this->{SKIP_SILENT},
+        'skip-correlation=1'                        => \$this->{SKIP_CORRELATION},
         'help' => \$help,
     );
 
@@ -66,7 +67,7 @@ sub process {
     unless( $options ) { die $this->usage_text(); }
 
 
-# TODO, by MAW.  
+# TODO
 
 # Separating GLM and non-glm functionality would be easier for software maintenance and usability,
 # since these functionalities have little in common.
@@ -112,7 +113,7 @@ sub process {
     my @all_sample_names; # names of all the samples, no matter if it's mutated or not
 
     # parse out the sample names from the bam-list which should match the names in the MAF file
-    # MAW bam_list content saved in @all_sample_names.  
+    # bam_list content saved in @all_sample_names.  
     if ($bam_list) { 
         my $sampleFh = IO::File->new( $bam_list ) or die "Couldn't open $bam_list. $!\n";
         while( my $line = $sampleFh->getline ) {
@@ -130,7 +131,7 @@ sub process {
         my $test_method;
         my $full_output_filename;
 
-        # MAW why is the option to run any combination of these important?  Good place to split GLM and non-GLM
+        # TODO: why is the option to run any combination of these important?  Good place to split GLM and non-GLM
         if( $datatype =~ /numeric/i ) {
             $full_output_filename = $output_file . ".numeric.tsv";
             $test_method = $this->{NUMERICAL_DATA_TEST_METHOD};
@@ -141,7 +142,7 @@ sub process {
             $test_method = "fisher";
         }
 
-        if( $datatype =~ /glm/i ) { # here MAW
+        if( $datatype =~ /glm/i ) { 
             $full_output_filename = $output_file;  # User specifies filename exactly.
             $test_method = "glm";
         }
@@ -163,8 +164,9 @@ sub process {
         }
         
         #create correlation matrix unless it's glm analysis without using a maf file
-        # MAW contents of all_sample_names (and bam_list) ignored if GLM and not using MAF.  This is why 
-        # bam_list argument should be optional. -- really?  Empirially, content of bam_list changes nothing, but @all_sample_names is propagaged
+        # contents of all_sample_names (and bam_list) ignored if GLM and not using MAF.  This is why 
+        # bam_list argument should be optional. -- really?  
+        # Empirially, content of bam_list changes nothing, but @all_sample_names is propagaged
         # Also, there are times when I want to create a matrix file and save it without doing processing.
         # This is currently not supported.
         unless(( $datatype =~ /glm/i && !$this->{USE_MAF_IN_GLM} ) || $this->{INPUT_CLINICAL_CORRELATION_MATRIX_FILE} ) {
@@ -181,7 +183,7 @@ sub process {
             }
         }
 
-        # MAW want to have the option to exit loop here, after mutation matrix has been constructed and written to disk.
+        # TODO want to have the option to exit loop here, after mutation matrix has been constructed and written to disk.
         next if ( $this->{SKIP_CORRELATION} );  # we want this to work in future
         #warn("Skipping correlation, hard coded.");  # uncomment to stop after mutation matrix created
         #next;                                       # uncomment to stop after mutation matrix created
@@ -236,7 +238,7 @@ sub create_sample_gene_matrix_gene {
         #check if sample exists in clinical data
         # this is not helpful when creating a mutation matrix from MAF file.
         # presumably, user has curated MAF file appropriately.  This leads to problems when hoping to use one 
-        # MAF file to create multiple clinical datasets. MAW
+        # MAF file to create multiple clinical datasets. 
 #        unless( defined $samples->{$sample} ) {
 #            warn "Sample Name: $sample from MAF file does not exist in Clinical Data File";
 #            next;
@@ -383,78 +385,6 @@ sub create_sample_gene_matrix_variant {
     return $output_matrix;
 }   # create_sample_gene_matrix_variant 
 
-
-##### GMS Documentation #####
-# class Genome::Model::Tools::Music::ClinicalCorrelation {
-#     is => 'Genome::Model::Tools::Music::Base',
-#     has_input => [
-#         bam_list => {
-#             is => 'Text', , is_optional => 1, # this is optional if mutation matrix is supplied.
-#             doc => "Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam] (See Description)",
-#         },
-#         maf_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "List of mutations using TCGA MAF specification v2.3",
-#         },
-#         output_file => {
-#             is_output => 1, is => 'Text',
-#             doc => "Results of clinical-correlation tool. Will have suffix added for data type",
-#         },
-#         clinical_correlation_matrix_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "Specify a file to store the sample-vs-gene matrix created during calculations",
-#         },
-#         input_clinical_correlation_matrix_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "Instead of creating this from the MAF, input the sample-vs-gene matrix for calculations",
-#         },
-#         genetic_data_type => {
-#             is => 'Text', is_optional => 1, default => "gene",
-#             doc => "Correlate clinical data to \"gene\" or \"variant\" level data",
-#         },
-#         numeric_clinical_data_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "Table of samples (y) vs. numeric clinical data category (x)",
-#         },
-#         numerical_data_test_method => {
-#             is => 'Text', is_optional => 1, default => 'wilcox',
-#             doc => "Either 'cor' for Pearson Correlation or 'wilcox' for the Wilcoxon Rank-Sum Test for numerical clinical data",
-#         },
-#         categorical_clinical_data_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "Table of samples (y) vs. categorical clinical data category (x)",
-#         },
-#         glm_model_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "File outlining the type of model, response variable, covariants, etc. for the GLM analysis. (See DESCRIPTION)",
-#         },
-#         glm_clinical_data_file => {
-#             is => 'Text', is_optional => 1,
-#             doc => "Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)",
-#         },
-#         use_maf_in_glm => {
-#             is => 'Boolean', is_optional => 1, default => 0,
-#             doc => "Create a variant matrix from the MAF file as variant input to GLM analysis.",
-#         },
-#         skip_non_coding => {
-#             is => 'Boolean', is_optional => 1, default => 1,
-#             doc => "Skip non-coding mutations from the provided MAF file",
-#         },
-#         skip_silent => {
-#             is => 'Boolean', is_optional => 1, default => 1,
-#             doc => "Skip silent mutations from the provided MAF file",
-#         },
-#         skip_correlation => {  # MAW. Create mutation matrix file, but don't run R code.
-#             is => 'Boolean', is_optional => 1, default => 0,
-#             doc => "Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file",
-#         },
-#     ],
-#     doc => "Correlate phenotypic traits against mutated genes, or against individual variants",
-# };
-# 
-# 
-
-
 # MuSiC2 help
 # taken from Smg.pm
 
@@ -474,7 +404,7 @@ SYNOPSIS (UPDATED, may want to delete non-GLM tests)
         --genetic-data-type 'gene' \\
         --output-file /path/output_file
 
- musics clinical-correlation \\  # Categorical test
+ music2 clinical-correlation \\  # Categorical test
         --maf-file /path/myMAF.tsv \\
         --bam-list /path/myBamList.tsv \\
         --numeric-clinical-data-file /path/myNumericData.tsv \\
@@ -530,16 +460,16 @@ OPTIONAL INPUTS
         Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)
     use_maf_in_glm 
         Create a variant matrix from the MAF file as variant input to GLM analysis.  
-        Default value 'false' if not specified
+        Default value 'false' if not specified, add prefix "no" to negate
     skip_non_coding 
         Skip non-coding mutations from the provided MAF file. 
-        Default value 'true' if not specified
+        Default value 'true' if not specified, add prefix "no" to negate
     skip_silent 
         Skip silent mutations from the provided MAF file.  
-        Default value 'true' if not specified
+        Default value 'true' if not specified, add prefix "no" to negate
     skip_correlation 
         Do not perform correlation analysis, but exit after writing clinical_correlation_matrix_file.  
-        Default value 'false' if not specified
+        Default value 'false' if not specified, add prefix "no" to negate
 
 DESCRIPTION
     This command relates clinical traits and mutational data. Either one can
