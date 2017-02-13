@@ -12,8 +12,6 @@ use IO::File;
 use Getopt::Long;
 
 # TODO: 
-# * get rid of pos_genes, this will be done in a post-processing step
-#   * Also getting rid of "old" filter results
 # * standardize input, output format.  Needs to be reentrant
 # * Allow user to define whether output will be genes which remain or which are discarded
 # * Allow values for y_thresh_l, etc. (6, 0.5) to be modified by user
@@ -43,19 +41,6 @@ sub get_data_filenames {
     return (\@files); 
 }
 
-# get list of positive genes (for caller assessment)
-sub get_pos_genes {
-    my ($this, $pos_genes_file) = @_;
-    my $pos_genes = {};
-    my $DF = IO::File->new( $pos_genes_file ) or die "Couldn't open $pos_genes_file. $!\n";
-    while( my $line = $DF->getline ) {
-        chomp $line;
-        $pos_genes->{$line} = 1;
-    }
-    $DF->close;
-    return ($pos_genes);
-}
-
 sub print_header{
     my $this = shift;
     my $s = <<HEADER;
@@ -76,7 +61,7 @@ HEADER
 
 # Returns: number of genes tested and hash of filtered genes
 sub process_file {
-    my ($this, $file, $pos_genes) = @_;
+    my ($this, $file) = @_;
 
 # read data in this file
     print "# processing data in file: $file\n";
@@ -88,7 +73,9 @@ sub process_file {
     my $iters = 0;
 
 # y-threshold is variable for left-plane genes
-    for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= 6; $y_thresh_l -= 0.5) {
+    #for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= 6; $y_thresh_l -= 0.5) {
+    # defaults: Y_THRESH_L_MIN = 6, Y_THRESH_L_DEC = 0.5
+    for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= $this->{Y_THRESH_L_MIN}; $y_thresh_l -= $this->{Y_THRESH_L_DEC}) {
         print"#   trying cutoff of Y = $y_thresh_l\n";
 
 # x-threshold that delineates typical vs large genes
@@ -100,7 +87,7 @@ sub process_file {
                     $y_thresh_r += $this->{Y_INCR}) {
 
                 if ($this->evaluate_long_filter($pts, $x_thresh, $y_thresh_l, $y_thresh_r)) {
-                    my ($filtered_long_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r, $pos_genes);
+                    my ($filtered_long_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
                     print "      total iterations = $iters\n";
                     return ($genes_tested, $filtered_long_genes);
                 } else {
@@ -162,80 +149,39 @@ sub print_diagnostics {
 }
 
 sub get_filtered_genes {    
-    # pos_genes will go away
-    my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r, $pos_genes) = @_;
+    my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
 
     my $filtered_long_genes = {}; # this is returned
 
-    my ($old_tps, $old_fps, $old_tns, $old_fns) = (0, 0, 0, 0);
-    my ($new_tps, $new_fps, $new_tns, $new_fns) = (0, 0, 0, 0);
+    my ($new_tps, $new_tns) = (0, 0);
     my ($original_fp, $current_fp, $true_pos) = ({}, {}, {});
     foreach my $y (sort _numeric_ keys %{$gene_data}) {
         foreach my $x (keys %{$gene_data->{$y}}) {
             foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
 
-# original (fixed-y) filtering (no long-gene post-hoc filter)
-                if ($y <= $y_thresh_l) {
-                    if (exists $pos_genes->{$gene_name}) {
-                        $old_fns++;
-                    } else {
-                        $old_tns++;
-                    }
-                } else {
-                    if (exists $pos_genes->{$gene_name}) {
-                        $old_tps++;
-                    } else {
-                        $old_fps++;
-                    }
-                }
-
 # new filtering results with long-gene post-hoc filter
                 if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
                     $filtered_long_genes->{$gene_name}++;
                     $current_fp->{$gene_name} = "($x, $y)";
-                    if (exists $pos_genes->{$gene_name}) {
-                        $new_fns++;
-                    } else {
-                        $new_tns++;
-                    }
+# with pos_genes gone, all are new_fns/new_tps
+                    $new_tns++;
                 } elsif ($y <= $y_thresh_l) {
                     $original_fp->{$gene_name} = "($x, $y)";
-                    if (exists $pos_genes->{$gene_name}) {
-                        $new_fns++;
-                    } else {
-                        $new_tns++;
-                    }
+                    $new_tns++;
                 } else {
                     $true_pos->{$gene_name} = "($x, $y)";
-                    if (exists $pos_genes->{$gene_name}) {
-                        $new_tps++;
-                    } else {
-                        $new_fps++;
-                    }
+                    $new_tps++;
                 }
             }
         }
     }
-    print "      OLD FILTERING: fp = $old_fps fn = $old_fns\n";
-    print "      NEW FILTERING: fp = $new_fps fn = $new_fns\n";
-    print "      additional genes now filtered as FPs under 'large gene' test (* = NOT part of 366 gene set)\n";
+    print "      p = $new_tps n = $new_tns\n";
+    print "      additional genes now filtered as FPs under 'large gene' test\n";
     foreach my $gene_name (sort keys %{$current_fp}) {
-        print "d      ";
-        if (exists $pos_genes->{$gene_name}) {
-            print "  ";
-        } else {
-            print "* ";
-        }
         print "$gene_name   $current_fp->{$gene_name}\n";
     }
-    print "      genes kept as significant (* = NOT part of 366 gene set)\n";
+    print "      genes kept as significant\n";
     foreach my $gene_name (sort keys %{$true_pos}) {
-        print "d      ";
-        if (exists $pos_genes->{$gene_name}) {
-            print "  ";
-        } else {
-            print "* ";
-        }
         print "$gene_name   $true_pos->{$gene_name}\n";
     }
     print "\n";
@@ -248,12 +194,13 @@ sub new {
     my $class = shift;
     my $this = {};
 
-    $this->{POS_GENE_FILE} = "LongGeneFilter.dat";
     $this->{DATA_FILES} = undef;
     $this->{LIST_FILE} = undef;
     $this->{X_THRESH_GENE_SIZE} = 5000;
     $this->{X_INCR} = 500;
     $this->{Y_THRESH_FIXED} = 8;
+    $this->{Y_THRESH_L_MIN} = 6;
+    $this->{Y_THRESH_L_DEC} = 0.5;
     $this->{Y_MAX} = 18;
     $this->{Y_INCR} = 0.1;
     $this->{PVALUE_THRESHOLD} = 0.005;
@@ -270,22 +217,22 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
-            'pos-gene-file=s'       => \$this->{POS_GENE_FILE},
-            'data-files=s'           => \$this->{DATA_FILES},
+            'data-files=s'          => \$this->{DATA_FILES},
             'list-file=s'           => \$this->{LIST_FILE},
             'x-thresh-gene-size=i'  => \$this->{X_THRESH_GENE_SIZE},
             'x-incr=i'              => \$this->{X_INCR},
             'y-thresh-fixed=f'      => \$this->{Y_THRESH_FIXED},
+            'y-thresh-l-min=f'      => \$this->{Y_THRESH_L_MIN},
+            'y-thresh-l-dec=f'      => \$this->{Y_THRESH_L_DEC},
             'y-max=f'               => \$this->{Y_MAX},
             'y-incr=f'              => \$this->{Y_INCR},
             'pvalue-threshold=f'    => \$this->{PVALUE_THRESHOLD},
             'help' => \$help,
             );
+    # defaults: Y_THRESH_L_MIN = 6, Y_THRESH_L_DEC = 0.5
 
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->usage_text(); }
-
-    my $pos_genes = $this->get_pos_genes($this->{POS_GENE_FILE});
 
     my @files = @{$this->get_data_filenames($this->{DATA_FILES}, $this->{LIST_FILE})};
     my $num_cancers = scalar @files;
@@ -301,7 +248,7 @@ sub process {
     my $total_gene_evals = 0;
 
     foreach my $file (@files) {
-        my ($gene_evals, $filtered_long_genes) = $this->process_file($file, $pos_genes);
+        my ($gene_evals, $filtered_long_genes) = $this->process_file($file);
 
         $total_gene_evals += $gene_evals;
         foreach my $gene (keys %{$filtered_long_genes}) {  
@@ -314,13 +261,8 @@ sub process {
     print "TOTAL GENE EVALUATIONS OVER ALL $num_cancers CANCERS = $total_gene_evals\n\n";
 
 # union of all genes netted by the long gene filter
-    print "\nunionized list of all genes filtered as FPs under 'large gene' test over all cancers (* = part of 366 gene set)\n";
+    print "\nunionized list of all genes filtered as FPs under 'large gene' test over all cancers\n";
     foreach my $gene_name (sort keys %{$all_filtered_long_genes}) {
-        if (exists $pos_genes->{$gene_name}) {
-            print "* ";
-        } else {
-            print "  ";
-        }
         print "$gene_name   ($all_filtered_long_genes->{$gene_name} cancers)\n";
     }
 }
@@ -460,9 +402,10 @@ sub usage_text {
         as compared to shorter ones
 
         USAGE 
-        music2 long-gene-filter --data-file=?|--list-file=? [--pos-gene-file=?]
+        music2 long-gene-filter --data-file=?|--list-file=? 
         [x-thresh-gene-size=?] [x-incr=?] [y-thresh-fixed=?] [y-max=?]
         [y-incr=?] [pvalue-threshold=?]
+        [y-thresh-l-min=?] [y-thresh-l-dec=?]
 
         SEE ALSO
 
@@ -492,13 +435,6 @@ sub help_text {
             * gene size (integer) 
             * -log10(MuSiC P-value)
 
-        pos-gene-file
-
-            Filename of list of genes, one per line.
-            These are the genes which should be kept in the analysis --- it is an error
-            to filter them --- all other genes should be filtered.
-            Allows for sensitivity & specificity estimation.
-
         x-thresh-gene-size
 
             Set the threshold between "typical" genes and "large" genes.  Default 5000
@@ -507,11 +443,11 @@ sub help_text {
 
             Down-increment of threshold delimiting typical and large genes.  Default 500
 
-        y-thresh-fixed
+        y-thresh-fixed, y-thresh-l-min=f, y-thresh-l-dec
 
             Highest p-value for typical genes is also lower-bound for large genes (the
             actual p-value is exp(- y-thresh-fixed).  Default value 8 (corresponding to
-            p-value = 0.00000001)
+            p-value = 0.00000001).  TODO: describe thresh-l-min, thresh-l-dec
 
         y-max
 
