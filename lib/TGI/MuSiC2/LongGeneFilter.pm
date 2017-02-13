@@ -1,10 +1,10 @@
 package TGI::MuSiC2::LongGeneFilter;
 
-#__STANDARD PERL PACKAGES
+# standard perl packages
 use strict;
 use warnings;
 
-#__LIBRARIES
+# libraries
 use Statistics::Distributions;
 
 use Carp;  # Use carp/croak/confess for improved error handling http://perldoc.perl.org/Carp.html
@@ -13,6 +13,7 @@ use Getopt::Long;
 
 # TODO: 
 # * get rid of pos_genes, this will be done in a post-processing step
+#   * Also getting rid of "old" filter results
 # * standardize input, output format.  Needs to be reentrant
 # * Allow user to define whether output will be genes which remain or which are discarded
 # * Allow values for y_thresh_l, etc. (6, 0.5) to be modified by user
@@ -42,7 +43,7 @@ sub get_data_filenames {
     return (\@files); 
 }
 
-#__GET LIST OF POSITIVE GENES (FOR CALLER ASSESSMENT)
+# get list of positive genes (for caller assessment)
 sub get_pos_genes {
     my ($this, $pos_genes_file) = @_;
     my $pos_genes = {};
@@ -77,154 +78,171 @@ HEADER
 sub process_file {
     my ($this, $file, $pos_genes) = @_;
 
-#    my $eval_done = 0;  # this can go away
-    my $genes_tested = 0;  # this is returned
-    my $filtered_long_genes = {}; # this is returned
-
-#__READ DATA IN THIS FILE
-    warn "# processing data in file: $file\n";
-#     print "# -------------------------------------------------------------\n";
+# read data in this file
     print "# processing data in file: $file\n";
     print "# -------------------------------------------------------------\n";
-    my ($pts, $gene_data, $max_y_large_gene) = $this->_read_data_file_ ($file);
 
-#__Y-THRESHOLD IS CURRENTLY FIXED FOR LEFT-PLANE GENES
+    my ($pts, $gene_data, $max_y_large_gene) = $this->read_data_file($file);
+    my $genes_tested = @{$pts};
+
     my $iters = 0;
 
+# y-threshold is variable for left-plane genes
     for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= 6; $y_thresh_l -= 0.5) {
-        warn "#   trying cutoff of Y = $y_thresh_l\n";
+        print"#   trying cutoff of Y = $y_thresh_l\n";
 
-#__X-THRESHOLD THAT DELINEATES TYPICAL VS LARGE GENES
+# x-threshold that delineates typical vs large genes
         for (my $x_thresh = $this->{X_THRESH_GENE_SIZE}; $x_thresh > $this->{X_INCR};
                 $x_thresh -= $this->{X_INCR}) {
 
-#__MOVE Y-THRESHOLD UPWARD FOR LARGE GENES UNTIL SIGNIFICANCE VANISHES
+# move y-threshold upward for large genes until significance vanishes
             for (my $y_thresh_r = $y_thresh_l; $y_thresh_r <= $this->{Y_MAX};
                     $y_thresh_r += $this->{Y_INCR}) {
 
-#__GET 2x2 TABLE CELL COUNTS
-                my ($top_left, $bot_left, $top_right, $bot_right) = _counts_ (
-                        $pts, $x_thresh, $y_thresh_l, $y_thresh_r
-                        );
-
-#__PERFORM 2x2 TABLE SIGNIFICANCE TEST
-                my ($pval, $grand_total) = _test_ ($top_left, $bot_left, $top_right, $bot_right);
-                if ($genes_tested == 0) {
-                    $genes_tested = $grand_total;
-                }
-
-#__TERMINATE ONCE SIGNIFICANCE VANISHES: CURRENT Y-THRESHOLD IS...
-                if ($pval > $this->{PVALUE_THRESHOLD}) {
-# Success! print out diagnostics
-#__OUTPUT
-                    my $p_val_typical_gene = 10**(-$y_thresh_l); #Log10
-                    my $p_val_large_gene = 10**(-$y_thresh_r);   #Log10
-                    print "   total gene evalluations for this cancer: $grand_total\n";
-                    print "d  GENE SIZE: TYPICAL GENES <= $x_thresh <= LARGE GENES";
-                    print "   (unchanged from default)" if
-                        $x_thresh eq $this->{X_THRESH_GENE_SIZE};
-                    print "\n";
-                    print "   RECOMMENDED -LN(P-VALUE) CUT-OFFS\n";
-                    print "d     typical genes: -LN(P) = $y_thresh_l " .
-                        "(P-val = $p_val_typical_gene)";
-                    print "   (unchanged from default)" if
-                        $y_thresh_l eq $this->{Y_THRESH_FIXED};
-                    print "\n";
-                    print "d     large genes:   -LN(P) = $y_thresh_r " .
-                        "(P-val = $p_val_large_gene)";
-                    print "   (unchanged from default)" if
-                        $y_thresh_r eq $this->{Y_THRESH_FIXED};
-                    print "\n";
-                    print "   CALCULATION META-DATA\n";
+                if ($this->evaluate_long_filter($pts, $x_thresh, $y_thresh_l, $y_thresh_r)) {
+                    my ($filtered_long_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r, $pos_genes);
                     print "      total iterations = $iters\n";
-                    print "      final 2x2 table:   $top_left,  $top_right\n";
-                    print "                         $bot_left,  $bot_right\n";
-                    print "      final P-val $pval > threshold $this->{PVALUE_THRESHOLD} " .
-                        "(mutational significance status not statistically " .
-                        "related to gene size)\n";
-
-                    my ($old_tps, $old_fps, $old_tns, $old_fns) = (0, 0, 0, 0);
-                    my ($new_tps, $new_fps, $new_tns, $new_fns) = (0, 0, 0, 0);
-                    my ($original_fp, $current_fp, $true_pos) = ({}, {}, {});
-                    foreach my $y (sort _numeric_ keys %{$gene_data}) {
-                        foreach my $x (keys %{$gene_data->{$y}}) {
-                            foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
-
-#__ORIGINAL (FIXED-Y) FILTERING (NO LONG-GENE POST-HOC FILTER)
-                                if ($y <= $y_thresh_l) {
-                                    if (exists $pos_genes->{$gene_name}) {
-                                        $old_fns++;
-                                    } else {
-                                        $old_tns++;
-                                    }
-                                } else {
-                                    if (exists $pos_genes->{$gene_name}) {
-                                        $old_tps++;
-                                    } else {
-                                        $old_fps++;
-                                    }
-                                }
-
-#__NEW FILTERING RESULTS WITH LONG-GENE POST-HOC FILTER
-                                if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
-                                    $filtered_long_genes->{$gene_name}++;
-                                    $current_fp->{$gene_name} = "($x, $y)";
-                                    if (exists $pos_genes->{$gene_name}) {
-                                        $new_fns++;
-                                    } else {
-                                        $new_tns++;
-                                    }
-                                } elsif ($y <= $y_thresh_l) {
-                                    $original_fp->{$gene_name} = "($x, $y)";
-                                    if (exists $pos_genes->{$gene_name}) {
-                                        $new_fns++;
-                                    } else {
-                                        $new_tns++;
-                                    }
-                                } else {
-                                    $true_pos->{$gene_name} = "($x, $y)";
-                                    if (exists $pos_genes->{$gene_name}) {
-                                        $new_tps++;
-                                    } else {
-                                        $new_fps++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    print "      OLD FILTERING: fp = $old_fps fn = $old_fns\n";
-                    print "      NEW FILTERING: fp = $new_fps fn = $new_fns\n";
-                    print "      additional genes now filtered as FPs under 'large gene' test (* = NOT part of 366 gene set)\n";
-                    foreach my $gene_name (sort keys %{$current_fp}) {
-                        print "d      ";
-                        if (exists $pos_genes->{$gene_name}) {
-                            print "  ";
-                        } else {
-                            print "* ";
-                        }
-                        print "$gene_name   $current_fp->{$gene_name}\n";
-                    }
-                    print "      genes kept as significant (* = NOT part of 366 gene set)\n";
-                    foreach my $gene_name (sort keys %{$true_pos}) {
-                        print "d      ";
-                        if (exists $pos_genes->{$gene_name}) {
-                            print "  ";
-                        } else {
-                            print "* ";
-                        }
-                        print "$gene_name   $true_pos->{$gene_name}\n";
-                    }
-                    print "\n";
-                    return($genes_tested, $filtered_long_genes);
+                    return ($genes_tested, $filtered_long_genes);
                 } else {
                     $iters++;
                 }
             }
         }
     }
+
+    # TODO: how to deal with this error condition correctly?
     print "\n     NO CONVERGENCE USING CURRENT PARAMETERS\n\n";
-    return($genes_tested, $filtered_long_genes);
+    return($genes_tested, {});
 }
+
+sub evaluate_long_filter {
+    my ($this, $pts, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
+
+# get 2X2 table cell counts
+    my ($top_left, $bot_left, $top_right, $bot_right) = _counts_( $pts, $x_thresh, $y_thresh_l, $y_thresh_r);
+
+# perform 2X2 table significance test
+    my ($pval) = _test_ ($top_left, $bot_left, $top_right, $bot_right);
+
+# terminate once significance vanishes: current y-threshold is...
+    if ($pval > $this->{PVALUE_THRESHOLD}) {
+
+        # Success! print out diagnostics
+        $this->print_diagnostics($x_thresh, $y_thresh_l, $y_thresh_r, $top_left, $bot_left, $top_right, $bot_right, $pval);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+sub print_diagnostics {
+    my ($this, $x_thresh, $y_thresh_l, $y_thresh_r, $top_left, $bot_left, $top_right, $bot_right, $pval) = @_;
+
+    my $grand_total = $top_left + $bot_left + $top_right + $bot_right;
+    my $p_val_typical_gene = 10**(-$y_thresh_l); #Log10
+    my $p_val_large_gene = 10**(-$y_thresh_r);   #Log10
+
+    print "   total gene evaluations for this cancer: $grand_total\n";
+    print "d  GENE SIZE: TYPICAL GENES <= $x_thresh <= LARGE GENES";
+    print "   (unchanged from default)" if $x_thresh eq $this->{X_THRESH_GENE_SIZE};
+    print "\n";
+    print "   RECOMMENDED -LN(P-VALUE) CUT-OFFS\n";
+    print "d     typical genes: -LN(P) = $y_thresh_l (P-val = $p_val_typical_gene)";
+    print "   (unchanged from default)" if $y_thresh_l eq $this->{Y_THRESH_FIXED};
+    print "\n";
+    print "d     large genes:   -LN(P) = $y_thresh_r (P-val = $p_val_large_gene)";
+    print "   (unchanged from default)" if $y_thresh_r eq $this->{Y_THRESH_FIXED};
+    print "\n";
+    print "   CALCULATION META-DATA\n";
+    print "      final 2x2 table:   $top_left,  $top_right\n";
+    print "                         $bot_left,  $bot_right\n";
+    print "      final P-val $pval > threshold $this->{PVALUE_THRESHOLD} " .
+        "(mutational significance status not statistically " .
+        "related to gene size)\n";
+}
+
+sub get_filtered_genes {    
+    # pos_genes will go away
+    my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r, $pos_genes) = @_;
+
+    my $filtered_long_genes = {}; # this is returned
+
+    my ($old_tps, $old_fps, $old_tns, $old_fns) = (0, 0, 0, 0);
+    my ($new_tps, $new_fps, $new_tns, $new_fns) = (0, 0, 0, 0);
+    my ($original_fp, $current_fp, $true_pos) = ({}, {}, {});
+    foreach my $y (sort _numeric_ keys %{$gene_data}) {
+        foreach my $x (keys %{$gene_data->{$y}}) {
+            foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
+
+# original (fixed-y) filtering (no long-gene post-hoc filter)
+                if ($y <= $y_thresh_l) {
+                    if (exists $pos_genes->{$gene_name}) {
+                        $old_fns++;
+                    } else {
+                        $old_tns++;
+                    }
+                } else {
+                    if (exists $pos_genes->{$gene_name}) {
+                        $old_tps++;
+                    } else {
+                        $old_fps++;
+                    }
+                }
+
+# new filtering results with long-gene post-hoc filter
+                if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
+                    $filtered_long_genes->{$gene_name}++;
+                    $current_fp->{$gene_name} = "($x, $y)";
+                    if (exists $pos_genes->{$gene_name}) {
+                        $new_fns++;
+                    } else {
+                        $new_tns++;
+                    }
+                } elsif ($y <= $y_thresh_l) {
+                    $original_fp->{$gene_name} = "($x, $y)";
+                    if (exists $pos_genes->{$gene_name}) {
+                        $new_fns++;
+                    } else {
+                        $new_tns++;
+                    }
+                } else {
+                    $true_pos->{$gene_name} = "($x, $y)";
+                    if (exists $pos_genes->{$gene_name}) {
+                        $new_tps++;
+                    } else {
+                        $new_fps++;
+                    }
+                }
+            }
+        }
+    }
+    print "      OLD FILTERING: fp = $old_fps fn = $old_fns\n";
+    print "      NEW FILTERING: fp = $new_fps fn = $new_fns\n";
+    print "      additional genes now filtered as FPs under 'large gene' test (* = NOT part of 366 gene set)\n";
+    foreach my $gene_name (sort keys %{$current_fp}) {
+        print "d      ";
+        if (exists $pos_genes->{$gene_name}) {
+            print "  ";
+        } else {
+            print "* ";
+        }
+        print "$gene_name   $current_fp->{$gene_name}\n";
+    }
+    print "      genes kept as significant (* = NOT part of 366 gene set)\n";
+    foreach my $gene_name (sort keys %{$true_pos}) {
+        print "d      ";
+        if (exists $pos_genes->{$gene_name}) {
+            print "  ";
+        } else {
+            print "* ";
+        }
+        print "$gene_name   $true_pos->{$gene_name}\n";
+    }
+    print "\n";
+
+    return($filtered_long_genes);
+}
+
 
 sub new {
     my $class = shift;
@@ -278,23 +296,24 @@ sub process {
 #  MAIN PROCESSING  #
 #####################
 
-#__PROCESS EACH FILE
+# PROCESS EACH FILE
     my $all_filtered_long_genes = {};
     my $total_gene_evals = 0;
 
     foreach my $file (@files) {
         my ($gene_evals, $filtered_long_genes) = $this->process_file($file, $pos_genes);
+
         $total_gene_evals += $gene_evals;
         foreach my $gene (keys %{$filtered_long_genes}) {  
             $all_filtered_long_genes->{$gene} += $filtered_long_genes->{$gene};
         }
     }
 
-#__DIAGNOSTIC GRAND TALLY
+# diagnostic grand tally
     print "\n";
     print "TOTAL GENE EVALUATIONS OVER ALL $num_cancers CANCERS = $total_gene_evals\n\n";
 
-#__UNION OF ALL GENES NETTED BY THE LONG GENE FILTER
+# union of all genes netted by the long gene filter
     print "\nunionized list of all genes filtered as FPs under 'large gene' test over all cancers (* = part of 366 gene set)\n";
     foreach my $gene_name (sort keys %{$all_filtered_long_genes}) {
         if (exists $pos_genes->{$gene_name}) {
@@ -308,10 +327,10 @@ sub process {
 
 sub _numeric_ {$a <=> $b}
 
-#   THE LINE "if (defined $y && $y) {" **IS** READING OCCURENCES OF 0.0
-#   IN THE INPUT FILES BECAUSE, ALTHOUGH PERL PROCESSES NUMBERS AND
-#   TEXT-THAT-RESEMBLES-A-NUMBER DIFFERENTLY (SEE BELOW EXAMPLE), IT *READS*
-#   A FILE OF NUMBERS INITIALLY AS TEXT
+#   the line "IF (DEFINED $Y && $Y) {" **is** reading occurences of 0.0
+#   in the input files because, although perl processes numbers and
+#   text-that-resembles-a-number differently (see below example), it *reads*
+#   a file of numbers initially as text
 #
 #   bash-3.2$ perl             bash-3.2$ perl
 #   $s = 0.0;                  $s = "0.0";   <---quotation marks on this one
@@ -323,25 +342,30 @@ sub _numeric_ {$a <=> $b}
 #   no                         yes
 
 
-# 3 column format, tab separated
-# gene_name in all upper-case
-# x = gene size (integer) 
-# y = -log10(MuSiC P-value)
-sub _read_data_file_ {
+# Input data is 3 column format, tab separated:
+# * gene_name in all upper-case
+# * x = gene size (integer) 
+# * y = -log10(MuSiC P-value)
+# Returns ($pts, $gene_data, $max_y_large_gene):
+# * pts is array of (X,Y) coordinates, with X gene size and Y=-log10(P-value)
+# * gene_data is a hash of counts of X,Y,Gene_name
+# * max_y_large_gene is the largest Y (lnP) value of any gene larger than X-threshold
+
+sub read_data_file {
     my ($this, $file) = @_;
     open (F, $file) || die "cant open $file";
     my ($pts, $gene_data, $max_y_large_gene) = ([], {}, 0);
     while (<F>) {
 
-#__PARSE LINE
+# parse line
         next if /^#/;
         chomp;
         my ($gene_name, $x, $y) = split;
 
-#__PROCESS A LEGITIMATE LINE
+# process a legitimate line
         if (defined $y && $y) {
 
-#__STORE POINTS AND TRACK MAX Y-VALUE FOR LARGE GENES AND GENE NAMES
+# store points and track max y-value for large genes and gene names
             push @{$pts}, [$x, $y];
             if ($x > $this->{X_THRESH_GENE_SIZE}) {
                 $max_y_large_gene = $y if $y > $max_y_large_gene;
@@ -354,20 +378,20 @@ sub _read_data_file_ {
 }
 
 
-#__GET 2x2 TABLE CELL COUNTS
+# get 2X2 table cell counts
 sub _counts_ {
     my ($pts, $x_thresh, $y_thresh_l, $y_thresh_r, $x_min) = @_;
 
-#__DEFAULTS
+# defaults
     $y_thresh_r = $y_thresh_l unless $y_thresh_r;
     $x_min = 0 unless $x_min;
 
-#__CREATE OBSERVED 2X2 TABLE THAT RESULTS FROM THESE THRESHOLD SETTINGS
+# create observed 2x2 table that results from these threshold settings
     my ($top_left, $bot_left, $top_right, $bot_right) = (0, 0, 0, 0);
     foreach my $pt (@{$pts}) {
         my ($x, $y) = @{$pt};
 
-#__LEFT-HALF-PLANE FOR TYPICAL GENES COMPARES TO FIXED Y-THRESHOLD
+# left-half-plane for typical genes compares to fixed y-threshold
         if ($x <= $x_thresh) {
             if ($y <= $y_thresh_l) {
                 $bot_left++;
@@ -375,7 +399,7 @@ sub _counts_ {
                 $top_left++;
             }
 
-#__AND RIGHT-HALF-PLANE FOR LARGE GENES TO PROVISIONAL Y-THRESHOLD
+# and right-half-plane for large genes to provisional y-threshold
         } else {
             if ($y <= $y_thresh_r) {
                 $bot_right++;
@@ -388,41 +412,41 @@ sub _counts_ {
 }
 
 
-#__PERFORM 2x2 TABLE SIGNIFICANCE TEST
+# perform 2X2 table significance test
 sub _test_ {
     my ($top_left, $bot_left, $top_right, $bot_right) = @_;
 
-#__MARGINAL TOTALS FOR THESE THRESHOLDS
+# marginal totals for these thresholds
     my $row_top = $top_left + $top_right;
     my $row_bot = $bot_left + $bot_right;
     my $col_left = $top_left + $bot_left;
     my $col_righ = $top_right + $bot_right;
 
-#__GRAND TOTAL
+# grand total is simply the sum of the arguments.  
     my $grand_total = $bot_left + $top_left + $bot_right + $top_right;
 
-#__SANITY CHECKING
+# sanity checking
 #  die "tallying problem" unless $row_top + $row_bot == $grand_total;
 #  die "tallying problem" unless $col_left + $col_righ == $grand_total;
 
-#__THEORETICAL 2X2 TABLE OF EXPECTED VALUES FROM MARGINAL TOTALS
+# theoretical 2x2 table of expected values from marginal totals
     my $top_left_expec = $col_left * $row_top / $grand_total;
     my $bot_left_expec = $col_left * $row_bot / $grand_total;
     my $top_right_expec = $col_righ * $row_top / $grand_total;
     my $bot_right_expec = $col_righ * $row_bot / $grand_total;
 
-#__COMPUTE CHI-SQUARE STATISTIC
+# compute chi-square statistic
     my $chisq = ($top_left - $top_left_expec)**2 / $top_left_expec +
         ($top_right - $top_right_expec)**2 / $top_right_expec +
         ($bot_left - $bot_left_expec)**2 / $bot_left_expec +
         ($bot_right - $bot_right_expec)**2 / $bot_right_expec;
 
-#__2X2 TABLE TEST HAS DOF OF 1
+# 2x2 table test has dof of 1
     my $dof = 1;
 
-#__COMPUTE GOODNESS-OF-FIT P-VALUE OF OBSERVED VS EXPECTED
+# compute goodness-of-fit p-value of observed vs expected
     my $pval = Statistics::Distributions::chisqrprob ($dof, $chisq);
-    return ($pval, $grand_total);
+    return ($pval);
 }
 
 sub usage_text {
