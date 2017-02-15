@@ -6,75 +6,34 @@ use warnings;
 
 # libraries
 use Statistics::Distributions;
+use Scalar::Util qw(looks_like_number);
+
 
 use Carp;  # Use carp/croak/confess for improved error handling http://perldoc.perl.org/Carp.html
 use IO::File;
 use Getopt::Long;
 
-# TODO: 
-# * standardize input, output format.  Needs to be reentrant
-# * Allow user to define whether output will be genes which remain or which are discarded
-# * Allow values for y_thresh_l, etc. (6, 0.5) to be modified by user
+# TODO:
+# allow max value of -log10(pvalue) to be defined by user
+# Continue testing with known data
 
-
-
-# Evaluate command line arguments to obtain list of data files.
-# if data_files defined, that is a comma-separated list of filenames
-# if list_file defined, that file containing a list of filenames
-# If both are defined that is an error
-# If neither is defined that is an error
-sub get_data_filenames {
-    my ($this, $data_files, $list_file) = @_;
-
-    die("Please define either --data-files or --list-file\n") if !($data_files xor $list_file);
-    my @files;
-    if ($list_file) {
-        my $DF = IO::File->new( $list_file ) or die "Couldn't open $list_file. $!\n";
-        while( my $line = $DF->getline ) {
-            chomp $line;
-            push(@files, $line);
-        }
-        $DF->close;
-    } else {
-        @files = split(/,/, $data_files);
+sub write_genes {
+    my ($this, $fn, $genes) = @_;
+    my $DF = IO::File->new( $fn, 'w' ) or die "Couldn't open $fn. $!\n";
+    foreach my $gene (@{$genes}) {
+        print $DF "$gene\n";
     }
-    return (\@files); 
-}
-
-sub print_header{
-    my $this = shift;
-    my $s = <<HEADER;
-# CANCER-SPECIFIC ADJUSTMENT OF P-VAL THRESHOLD FOR LARGE GENES\n#
-# music2 long-gene-filter \n#
-# ************************************************************\n#
-# PARAMETERS\n#\n
-# default delineation between 'typical' and 'large' genes: $this->{X_THRESH_GENE_SIZE}
-#    (note that this boundary may be modified for some cancers)
-# highest allowable Y-threshold: $this->{Y_MAX}\n#
-# P-value target above which mutational significance status
-#      and gene size are no longer statistically related: $this->{PVALUE_THRESHOLD}\n#
-# ************************************************************\n
-HEADER
-    print($s);
+    $DF->close;
 }
 
 
-# Returns: number of genes tested and hash of filtered genes
-sub process_file {
-    my ($this, $file) = @_;
-
-# read data in this file
-    print "# processing data in file: $file\n";
-    print "# -------------------------------------------------------------\n";
-
-    my ($pts, $gene_data, $max_y_large_gene) = $this->read_data_file($file);
-    my $genes_tested = @{$pts};
-
+# run filter algorithm by cycling through parameters and evaluate convergence.  Write filtered genes to files if convergence
+# occurs and return 1; return 0 if convergence fails.
+sub apply_filter {
+    my ($this, $pts, $gene_data, $pass_fn, $fail_fn, $new_fail_fn) = @_;
     my $iters = 0;
 
 # y-threshold is variable for left-plane genes
-    #for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= 6; $y_thresh_l -= 0.5) {
-    # defaults: Y_THRESH_L_MIN = 6, Y_THRESH_L_DEC = 0.5
     for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= $this->{Y_THRESH_L_MIN}; $y_thresh_l -= $this->{Y_THRESH_L_DEC}) {
         print"#   trying cutoff of Y = $y_thresh_l\n";
 
@@ -87,21 +46,24 @@ sub process_file {
                     $y_thresh_r += $this->{Y_INCR}) {
 
                 if ($this->evaluate_long_filter($pts, $x_thresh, $y_thresh_l, $y_thresh_r)) {
-                    my ($filtered_long_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
-                    print "      total iterations = $iters\n";
-                    return ($genes_tested, $filtered_long_genes);
+                    my ($pass_genes, $fail_genes, $new_fail_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
+
+                    if ($pass_fn) { $this->write_genes($pass_fn, $pass_genes); }
+                    if ($fail_fn) { $this->write_genes($fail_fn, $fail_genes); }
+                    if ($new_fail_fn) { $this->write_genes($new_fail_fn, $new_fail_genes); }
+
+                    print "Total iterations = $iters\n";
+                    return;
                 } else {
                     $iters++;
                 }
             }
         }
     }
-
-    # TODO: how to deal with this error condition correctly?
-    print "\n     NO CONVERGENCE USING CURRENT PARAMETERS\n\n";
-    return($genes_tested, {});
+    die("No convergence using current parameters\n");
 }
 
+# Evaluate whether filter converged with given parameters. If yes, print user diagnostics and return 1; otherwise return 0.
 sub evaluate_long_filter {
     my ($this, $pts, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
 
@@ -151,42 +113,26 @@ sub print_diagnostics {
 sub get_filtered_genes {    
     my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
 
-    my $filtered_long_genes = {}; # this is returned
+    # list of genes which are unfiltered, filtered, and newly filtered (by an increased y_thresh_r)
+    # note that "newly filtered" is a subset of "filtered"
+    my ($pass_genes, $fail_genes, $new_fail_genes) = ([], [], []); 
 
-    my ($new_tps, $new_tns) = (0, 0);
-    my ($original_fp, $current_fp, $true_pos) = ({}, {}, {});
     foreach my $y (sort _numeric_ keys %{$gene_data}) {
         foreach my $x (keys %{$gene_data->{$y}}) {
             foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
 
-# new filtering results with long-gene post-hoc filter
                 if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
-                    $filtered_long_genes->{$gene_name}++;
-                    $current_fp->{$gene_name} = "($x, $y)";
-# with pos_genes gone, all are new_fns/new_tps
-                    $new_tns++;
+                    push(@{$new_fail_genes}, $gene_name);
+                    push(@{$fail_genes}, $gene_name);
                 } elsif ($y <= $y_thresh_l) {
-                    $original_fp->{$gene_name} = "($x, $y)";
-                    $new_tns++;
+                    push(@{$fail_genes}, $gene_name);
                 } else {
-                    $true_pos->{$gene_name} = "($x, $y)";
-                    $new_tps++;
+                    push(@{$pass_genes}, $gene_name);
                 }
             }
         }
     }
-    print "      p = $new_tps n = $new_tns\n";
-    print "      additional genes now filtered as FPs under 'large gene' test\n";
-    foreach my $gene_name (sort keys %{$current_fp}) {
-        print "$gene_name   $current_fp->{$gene_name}\n";
-    }
-    print "      genes kept as significant\n";
-    foreach my $gene_name (sort keys %{$true_pos}) {
-        print "$gene_name   $true_pos->{$gene_name}\n";
-    }
-    print "\n";
-
-    return($filtered_long_genes);
+    return($pass_genes, $fail_genes, $new_fail_genes);
 }
 
 
@@ -194,8 +140,13 @@ sub new {
     my $class = shift;
     my $this = {};
 
-    $this->{DATA_FILES} = undef;
-    $this->{LIST_FILE} = undef;
+    $this->{DATA_FILE} = undef;
+    $this->{SMG_FILE} = undef;
+    $this->{SMG_COLUMN} = 9;
+    $this->{GENE_SIZE_FILE} = undef;
+    $this->{PASS_FILE} = undef;
+    $this->{FAIL_FILE} = undef;
+    $this->{NEW_FAIL_FILE} = undef;
     $this->{X_THRESH_GENE_SIZE} = 5000;
     $this->{X_INCR} = 500;
     $this->{Y_THRESH_FIXED} = 8;
@@ -217,8 +168,13 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
-            'data-files=s'          => \$this->{DATA_FILES},
-            'list-file=s'           => \$this->{LIST_FILE},
+            'data-file=s'           => \$this->{DATA_FILE},
+            'smg-file=s'            => \$this->{SMG_FILE},
+            'smg-column=i'          => \$this->{SMG_COLUMN},
+            'gene-size-file=s'      => \$this->{GENE_SIZE_FILE},
+            'pass-file=s'           => \$this->{PASS_FILE},
+            'fail-file=s'           => \$this->{FAIL_FILE},
+            'new-fail-file=s'       => \$this->{NEW_FAIL_FILE},
             'x-thresh-gene-size=i'  => \$this->{X_THRESH_GENE_SIZE},
             'x-incr=i'              => \$this->{X_INCR},
             'y-thresh-fixed=f'      => \$this->{Y_THRESH_FIXED},
@@ -229,94 +185,124 @@ sub process {
             'pvalue-threshold=f'    => \$this->{PVALUE_THRESHOLD},
             'help' => \$help,
             );
-    # defaults: Y_THRESH_L_MIN = 6, Y_THRESH_L_DEC = 0.5
 
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->usage_text(); }
 
-    my @files = @{$this->get_data_filenames($this->{DATA_FILES}, $this->{LIST_FILE})};
-    my $num_cancers = scalar @files;
+    my ($pts, $gene_data);
+    if ($this->{DATA_FILE}) {
+        ($pts, $gene_data) = $this->read_data_file($this->{DATA_FILE});
+    } else {
+        my $gene_sizes = $this->get_gene_sizes($this->{GENE_SIZE_FILE});
+        my $smg_pval = $this->get_smg_pval($this->{SMG_FILE}, $this->{SMG_COLUMN});
+        ($pts, $gene_data) = $this->merge_pval_size($gene_sizes, $smg_pval);
+    }
 
     $this->print_header();
+    $this->apply_filter($pts, $gene_data, $this->{PASS_FILE}, $this->{FAIL_FILE}, $this->{NEW_FAIL_FILE});
 
-#####################
-#  MAIN PROCESSING  #
-#####################
-
-# PROCESS EACH FILE
-    my $all_filtered_long_genes = {};
-    my $total_gene_evals = 0;
-
-    foreach my $file (@files) {
-        my ($gene_evals, $filtered_long_genes) = $this->process_file($file);
-
-        $total_gene_evals += $gene_evals;
-        foreach my $gene (keys %{$filtered_long_genes}) {  
-            $all_filtered_long_genes->{$gene} += $filtered_long_genes->{$gene};
-        }
-    }
-
-# diagnostic grand tally
-    print "\n";
-    print "TOTAL GENE EVALUATIONS OVER ALL $num_cancers CANCERS = $total_gene_evals\n\n";
-
-# union of all genes netted by the long gene filter
-    print "\nunionized list of all genes filtered as FPs under 'large gene' test over all cancers\n";
-    foreach my $gene_name (sort keys %{$all_filtered_long_genes}) {
-        print "$gene_name   ($all_filtered_long_genes->{$gene_name} cancers)\n";
-    }
 }
 
-sub _numeric_ {$a <=> $b}
+sub _numeric_ {$a <=> $b}  # used for string/number comparisons
 
-#   the line "IF (DEFINED $Y && $Y) {" **is** reading occurences of 0.0
-#   in the input files because, although perl processes numbers and
-#   text-that-resembles-a-number differently (see below example), it *reads*
-#   a file of numbers initially as text
+# Read a TSV file with gene name, gene size in columns 1, 2.  Return hash with gene name
+# as key and size as value.
+sub get_gene_sizes {
+    my ($this, $gene_size_fn) = @_;
+
+    my $sizes = {};
+
+    my $DF = IO::File->new( $gene_size_fn ) or die "Couldn't open $gene_size_fn. $!\n";
+    while( my $line = $DF->getline ) {
+        next if ($line =~ /^#/);
+        chomp $line;
+        my ($gene, $size) = split ' ', $line;
+        die ("Size not a number in $gene_size_fn") if not looks_like_number($size);
+        $sizes->{$gene} = $size;
+    }
+    $DF->close;
+
+    return($sizes);
+}
+
+# Read a TSV file with gene name in first column and arbitrary number of additional columns.
+# smg_column indicates column containing p-value data.
+# Return hash with gene name as key, -log10(p-value) as data
+# -log10(p-value) capped at 25
+sub get_smg_pval {
+    my ($this, $smg_file, $smg_column) = @_;
+
+    # column defs are 1-index, perl is 0
+    my $c = $smg_column - 1;
+
+    my $pvals = {};
+
+    my $DF = IO::File->new( $smg_file ) or die "Couldn't open $smg_file. $!\n";
+    while(my $line = $DF->getline ) {
+        next if ($line =~ /^#/);
+        chomp $line;
+        my @t = split ' ', $line;
+        my $pval = $t[$c];
+        die ("P-value not a number in $smg_file") if not looks_like_number($pval);
+        if ($pval == 0) {
+            $pvals->{$t[0]} = 25.0;
+        } else {
+            $pvals->{$t[0]} = -log($pval)/log(10);# http://perldoc.perl.org/functions/log.html
+        }
+    }
+    $DF->close;
+
+    return($pvals);
+}
+    
+# Add gene size info to pvalue data.  If size information for a given gene does not exist
+# that is an error
 #
-#   bash-3.2$ perl             bash-3.2$ perl
-#   $s = 0.0;                  $s = "0.0";   <---quotation marks on this one
-#   if ($s) {                  if ($s) {
-#     print "yes\n";              print "yes\n";
-#   } else {                   } else {
-#     print "no\n";               print "no\n";
-#   }                          }
-#   no                         yes
+# Returns ($pts, $gene_data):
+# * pts is array of (X,Y) coordinates, with X gene size and Y=-log10(P-value)
+# * gene_data is a hash of counts of X,Y,Gene_name
+sub merge_pval_size {
+    my ($this, $gene_sizes, $smg_pval) = @_;
+    my ($pts, $gene_data) = ([], {});
+
+    # iterate over all genes in smg_file
+    foreach my $gene_name (keys %{$smg_pval}) {
+        die("Size of gene $gene_name not defined in $this->{GENE_SIZE_FILE}\n") if not exists $gene_sizes->{$gene_name};
+        my $x = $gene_sizes->{$gene_name};
+        my $y = $smg_pval->{$gene_name};
+        push @{$pts}, [$x, $y];
+        $gene_data->{$y}->{$x}->{$gene_name}++;
+    }
+    return ($pts, $gene_data);
+}
 
 
 # Input data is 3 column format, tab separated:
 # * gene_name in all upper-case
 # * x = gene size (integer) 
 # * y = -log10(MuSiC P-value)
-# Returns ($pts, $gene_data, $max_y_large_gene):
+# Returns ($pts, $gene_data):
 # * pts is array of (X,Y) coordinates, with X gene size and Y=-log10(P-value)
 # * gene_data is a hash of counts of X,Y,Gene_name
-# * max_y_large_gene is the largest Y (lnP) value of any gene larger than X-threshold
 
 sub read_data_file {
     my ($this, $file) = @_;
     open (F, $file) || die "cant open $file";
-    my ($pts, $gene_data, $max_y_large_gene) = ([], {}, 0);
+    my ($pts, $gene_data) = ([], {});
     while (<F>) {
 
 # parse line
         next if /^#/;
         chomp;
         my ($gene_name, $x, $y) = split;
-
-# process a legitimate line
-        if (defined $y && $y) {
-
-# store points and track max y-value for large genes and gene names
-            push @{$pts}, [$x, $y];
-            if ($x > $this->{X_THRESH_GENE_SIZE}) {
-                $max_y_large_gene = $y if $y > $max_y_large_gene;
-            }
-            $gene_data->{$y}->{$x}->{$gene_name}++;
-        }
+        die ("Size not a number in $file") if not looks_like_number($x);
+        die ("P-value not a number in $file") if not looks_like_number($y);
+# store points 
+        push @{$pts}, [$x, $y];
+        $gene_data->{$y}->{$x}->{$gene_name}++;
     }
     close (F);
-    return ($pts, $gene_data, $max_y_large_gene);
+    return ($pts, $gene_data);
 }
 
 
@@ -391,21 +377,40 @@ sub _test_ {
     return ($pval);
 }
 
+sub print_header{
+    my $this = shift;
+    my $s = <<HEADER;
+# CANCER-SPECIFIC ADJUSTMENT OF P-VAL THRESHOLD FOR LARGE GENES\n#
+# music2 long-gene-filter \n#
+# ************************************************************\n#
+# PARAMETERS\n#\n
+# default delineation between 'typical' and 'large' genes: $this->{X_THRESH_GENE_SIZE}
+#    (note that this boundary may be modified for some cancers)
+# highest allowable Y-threshold: $this->{Y_MAX}\n#
+# P-value target above which mutational significance status
+#      and gene size are no longer statistically related: $this->{PVALUE_THRESHOLD}\n#
+# ************************************************************\n
+HEADER
+    print($s);
+}
+
 sub usage_text {
     my $this = shift;
     return <<HELP
 
         MuSiC2 Long Gene Filter Module
 
-        Find conditions for which significance status is no longer related to gene
-        size --- this is done by iteratively raising the cut-off for longer genes
-        as compared to shorter ones
+            Find conditions for which significance status is no longer related to gene
+            size --- this is done by iteratively raising the cut-off for longer genes
+            as compared to shorter ones
 
         USAGE 
-        music2 long-gene-filter --data-file=?|--list-file=? 
-        [x-thresh-gene-size=?] [x-incr=?] [y-thresh-fixed=?] [y-max=?]
-        [y-incr=?] [pvalue-threshold=?]
-        [y-thresh-l-min=?] [y-thresh-l-dec=?]
+
+            music2 long-gene-filter [--data-file=?] [--smg-file=?] [--smg-column=?]
+            [--gene-size-file] [--pass-file=?] [--fail-file=?] [--new-fail-file=?]
+            [--x-thresh-gene-size=?] [--x-incr=?] [--y-thresh-fixed=?] [--y-max=?]
+            [--y-incr=?] [--pvalue-threshold=?]
+            [--y-thresh-l-min=?] [--y-thresh-l-dec=?]
 
         SEE ALSO
 
@@ -422,18 +427,37 @@ sub help_text {
 
         ARGUMENTS
 
-        data-files, list-file
+        data-file
 
-            Define list of data files to process in one of two ways:
-            * data-files argument is a comma-separated list of data filenames
-            * list-file argument is a file containing data filenames, one per line
-
-        Either data-files or list-file is mandatory
-
-            The data files are in TSV format with the following columns:
+            The data files is in TSV format with the following columns:
             * gene_name in all upper-case
-            * gene size (integer) 
+            * gene size in base pairs (integer) 
             * -log10(MuSiC P-value)
+
+            Must specify either data-file, or smg-file and gene-size file
+
+        smg-file
+
+            Data file in TSV format specifying MuSiC P-values, typically as
+            generated by smg module.  First column specifies genes, Nth column specifies
+            the P-values, with N defined by smg-column.  Genes must be unique.  Argument 
+            required if data-file not defined.
+
+        smg-column
+            
+            If reading smg-file, define column which contains P-values used for calculations.
+            First column (containing genes) is 1.  Default 9.
+
+        gene-size-file
+    
+            File in TSV format defining gene sizes in base pairs (col 2) for given gene (col 1).
+            Genes must be unique, and all genes in smg-file must exist in gene-size-file. Argument
+            requred if data-file not defined.
+
+        pass-file, fail-file, new-fail-file
+
+            Output filenames.  Genes which pass, fail, and fail because of increased y_thresh_r 
+            get written to these files respectively.  See below for details.  Optional.
 
         x-thresh-gene-size
 
@@ -443,11 +467,16 @@ sub help_text {
 
             Down-increment of threshold delimiting typical and large genes.  Default 500
 
-        y-thresh-fixed, y-thresh-l-min=f, y-thresh-l-dec
+        y-thresh-fixed
 
             Highest p-value for typical genes is also lower-bound for large genes (the
             actual p-value is exp(- y-thresh-fixed).  Default value 8 (corresponding to
-            p-value = 0.00000001).  TODO: describe thresh-l-min, thresh-l-dec
+            p-value = 0.00000001).  
+
+        y-thresh-l-min=f, y-thresh-l-dec
+
+            TODO: describe thresh-l-min, thresh-l-dec
+            Defaults: 6, 0.5, resp.
 
         y-max
 
@@ -465,7 +494,40 @@ sub help_text {
         ===========
         DESCRIPTION
         ===========
+        
+        Visual description of algorithm:
+         
+                      |. . . . . . . . . . . . . . .
+                      | . . . . . . . . . . . . . . 
+                      |. . . . . . .================    y_thresh_r
+               -ln(P) | . . . . . . " " " " " " " " 
+                      |============= " " " " " " " "    y_thresh_l
+                      | ' ' ' ' ' ' ' ' ' ' ' ' ' ' 
+                      |' ' ' ' ' ' ' ' ' ' ' ' ' ' '
+                      --------------]----------------- gene size
+                                x_thresh
+             
+              Each gene exists as a point on a (gene size, -ln(P)) plane, and its significance
+              is defined by the domain in which it falls on the plane.
+              Absent the long gene filter, y_thresh_l = y_thresh_r, and all genes with -lnP < y_thresh_l
+              are considered not significant.
+             
+              The long gene filter adds an x_thresh size cutoff, beyond which 
+              y_thresh_r > y_thresh_l determines significance:  
+             
+              * Significant genes (indicated by . above, aka Pass_Genes) have 
+                -lnP > y_thresh_l if size < x_thresh, and -lnP > y_thresh_r if size > x_thresh.  
+             
+              * Insignificant genes (indicated by ' and " above, aka Fail_Genes) are the complement 
+                of this set.  
+              
+              Genes which are significant prior to this filter but insignificant after this
+              filter is applied (indicated by " above) are a subset of Fail_Genes and are
+              listed as New_Fail_Genes
 
+        Algorithm proceeds by adjusting (in order), y_thresh_r, x_thresh, y_thresh_l,
+        so that the 2x2 table test indicates no bias.  (TODO - clarify)
+             
         (1) Goodness of fit 2x2 table test for each cancer in the form of
         of the numbers of genes in each of 2 categories: (long or not long) and
         (significant p-value or not significant p-value)
