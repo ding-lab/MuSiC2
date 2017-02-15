@@ -13,10 +13,6 @@ use Carp;  # Use carp/croak/confess for improved error handling http://perldoc.p
 use IO::File;
 use Getopt::Long;
 
-# TODO:
-# allow max value of -log10(pvalue) to be defined by user
-# Continue testing with known data
-
 sub write_genes {
     my ($this, $fn, $genes) = @_;
     my $DF = IO::File->new( $fn, 'w' ) or die "Couldn't open $fn. $!\n";
