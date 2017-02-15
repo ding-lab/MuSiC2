@@ -27,15 +27,16 @@ sub write_genes {
 }
 
 
-# run filter algorithm by cycling through parameters and evaluate convergence.  Write filtered genes to files if convergence
-# occurs and return 1; return 0 if convergence fails.
+# run filter algorithm by cycling through parameters and evaluate convergence.
+# Write filtered genes to files if convergence occurs and return 1; return 0 if
+# convergence fails.
 sub apply_filter {
-    my ($this, $pts, $gene_data, $pass_fn, $fail_fn, $new_fail_fn) = @_;
+    my ($this, $pts, $gene_data, $pass_fn, $fail_fn, $lgf_fail_fn) = @_;
     my $iters = 0;
 
 # y-threshold is variable for left-plane genes
     for (my $y_thresh_l = $this->{Y_THRESH_FIXED}; $y_thresh_l >= $this->{Y_THRESH_L_MIN}; $y_thresh_l -= $this->{Y_THRESH_L_DEC}) {
-        print"#   trying cutoff of Y = $y_thresh_l\n";
+        print"#   trying y_thresh_l cutoff $y_thresh_l\n";
 
 # x-threshold that delineates typical vs large genes
         for (my $x_thresh = $this->{X_THRESH_GENE_SIZE}; $x_thresh > $this->{X_INCR};
@@ -46,13 +47,13 @@ sub apply_filter {
                     $y_thresh_r += $this->{Y_INCR}) {
 
                 if ($this->evaluate_long_filter($pts, $x_thresh, $y_thresh_l, $y_thresh_r)) {
-                    my ($pass_genes, $fail_genes, $new_fail_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
+                    my ($pass_genes, $fail_genes, $lgf_fail_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
 
                     if ($pass_fn) { $this->write_genes($pass_fn, $pass_genes); }
                     if ($fail_fn) { $this->write_genes($fail_fn, $fail_genes); }
-                    if ($new_fail_fn) { $this->write_genes($new_fail_fn, $new_fail_genes); }
+                    if ($lgf_fail_fn) { $this->write_genes($lgf_fail_fn, $lgf_fail_genes); }
 
-                    print "Total iterations = $iters\n";
+                    print "   Total iterations = $iters\n";
                     return;
                 } else {
                     $iters++;
@@ -91,38 +92,37 @@ sub print_diagnostics {
     my $p_val_typical_gene = 10**(-$y_thresh_l); #Log10
     my $p_val_large_gene = 10**(-$y_thresh_r);   #Log10
 
-    print "   total gene evaluations for this cancer: $grand_total\n";
-    print "d  GENE SIZE: TYPICAL GENES <= $x_thresh <= LARGE GENES";
+    print "\n   Total genes : $grand_total\n";
+    print "   Large gene threshold: $x_thresh ";
     print "   (unchanged from default)" if $x_thresh eq $this->{X_THRESH_GENE_SIZE};
     print "\n";
-    print "   RECOMMENDED -LN(P-VALUE) CUT-OFFS\n";
-    print "d     typical genes: -LN(P) = $y_thresh_l (P-val = $p_val_typical_gene)";
+    print "   Recommended -ln(P-value) cut-offs\n";
+    print "      typical genes: -ln(P-val) = $y_thresh_l (P-val = $p_val_typical_gene)";
     print "   (unchanged from default)" if $y_thresh_l eq $this->{Y_THRESH_FIXED};
     print "\n";
-    print "d     large genes:   -LN(P) = $y_thresh_r (P-val = $p_val_large_gene)";
+    print "      large genes:   -ln(P-val) = $y_thresh_r (P-val = $p_val_large_gene)";
     print "   (unchanged from default)" if $y_thresh_r eq $this->{Y_THRESH_FIXED};
     print "\n";
-    print "   CALCULATION META-DATA\n";
+    print "   Calculation meta-data\n";
     print "      final 2x2 table:   $top_left,  $top_right\n";
     print "                         $bot_left,  $bot_right\n";
     print "      final P-val $pval > threshold $this->{PVALUE_THRESHOLD} " .
-        "(mutational significance status not statistically " .
-        "related to gene size)\n";
+        "(mutational significance status not statistically related to gene size)\n";
 }
 
 sub get_filtered_genes {    
     my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
 
-    # list of genes which are unfiltered, filtered, and newly filtered (by an increased y_thresh_r)
-    # note that "newly filtered" is a subset of "filtered"
-    my ($pass_genes, $fail_genes, $new_fail_genes) = ([], [], []); 
+    # list of genes which are unfiltered, filtered, and newly filtered by this
+    # ("lgf") filter (because of an increased y_thresh_r).  Note that "newly
+    # lgf filtered" is a subset of "filtered"
+    my ($pass_genes, $fail_genes, $lgf_fail_genes) = ([], [], []); 
 
     foreach my $y (sort _numeric_ keys %{$gene_data}) {
         foreach my $x (keys %{$gene_data->{$y}}) {
             foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
-
                 if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
-                    push(@{$new_fail_genes}, $gene_name);
+                    push(@{$lgf_fail_genes}, $gene_name);
                     push(@{$fail_genes}, $gene_name);
                 } elsif ($y <= $y_thresh_l) {
                     push(@{$fail_genes}, $gene_name);
@@ -132,7 +132,7 @@ sub get_filtered_genes {
             }
         }
     }
-    return($pass_genes, $fail_genes, $new_fail_genes);
+    return($pass_genes, $fail_genes, $lgf_fail_genes);
 }
 
 
@@ -146,7 +146,7 @@ sub new {
     $this->{GENE_SIZE_FILE} = undef;
     $this->{PASS_FILE} = undef;
     $this->{FAIL_FILE} = undef;
-    $this->{NEW_FAIL_FILE} = undef;
+    $this->{LGF_FAIL_FILE} = undef;
     $this->{X_THRESH_GENE_SIZE} = 5000;
     $this->{X_INCR} = 500;
     $this->{Y_THRESH_FIXED} = 8;
@@ -155,6 +155,7 @@ sub new {
     $this->{Y_MAX} = 18;
     $this->{Y_INCR} = 0.1;
     $this->{PVALUE_THRESHOLD} = 0.005;
+    $this->{LOG_ZERO_P} = 25;
 
     bless $this, $class;
     $this->process();
@@ -171,10 +172,11 @@ sub process {
             'data-file=s'           => \$this->{DATA_FILE},
             'smg-file=s'            => \$this->{SMG_FILE},
             'smg-column=i'          => \$this->{SMG_COLUMN},
+            'log-zero-p=f'          => \$this->{LOG_ZERO_P},
             'gene-size-file=s'      => \$this->{GENE_SIZE_FILE},
             'pass-file=s'           => \$this->{PASS_FILE},
             'fail-file=s'           => \$this->{FAIL_FILE},
-            'new-fail-file=s'       => \$this->{NEW_FAIL_FILE},
+            'lgf-fail-file=s'       => \$this->{LGF_FAIL_FILE},
             'x-thresh-gene-size=i'  => \$this->{X_THRESH_GENE_SIZE},
             'x-incr=i'              => \$this->{X_INCR},
             'y-thresh-fixed=f'      => \$this->{Y_THRESH_FIXED},
@@ -199,7 +201,7 @@ sub process {
     }
 
     $this->print_header();
-    $this->apply_filter($pts, $gene_data, $this->{PASS_FILE}, $this->{FAIL_FILE}, $this->{NEW_FAIL_FILE});
+    $this->apply_filter($pts, $gene_data, $this->{PASS_FILE}, $this->{FAIL_FILE}, $this->{LGF_FAIL_FILE});
 
 }
 
@@ -228,7 +230,7 @@ sub get_gene_sizes {
 # Read a TSV file with gene name in first column and arbitrary number of additional columns.
 # smg_column indicates column containing p-value data.
 # Return hash with gene name as key, -log10(p-value) as data
-# -log10(p-value) capped at 25
+# -log10(p-value) capped at --log-zero-p value
 sub get_smg_pval {
     my ($this, $smg_file, $smg_column) = @_;
 
@@ -242,10 +244,13 @@ sub get_smg_pval {
         next if ($line =~ /^#/);
         chomp $line;
         my @t = split ' ', $line;
+        my $tlen = @t;
+        die("Requested column ($smg_column) which does not exist in $smg_file\n") if ($c >= $tlen);
         my $pval = $t[$c];
+
         die ("P-value not a number in $smg_file") if not looks_like_number($pval);
         if ($pval == 0) {
-            $pvals->{$t[0]} = 25.0;
+            $pvals->{$t[0]} = $this->{LOG_ZERO_P};
         } else {
             $pvals->{$t[0]} = -log($pval)/log(10);# http://perldoc.perl.org/functions/log.html
         }
@@ -380,10 +385,10 @@ sub _test_ {
 sub print_header{
     my $this = shift;
     my $s = <<HEADER;
-# CANCER-SPECIFIC ADJUSTMENT OF P-VAL THRESHOLD FOR LARGE GENES\n#
+# Adjustment of p-val threshold for large genes\n#
 # music2 long-gene-filter \n#
 # ************************************************************\n#
-# PARAMETERS\n#\n
+# Initial Parameters\n#
 # default delineation between 'typical' and 'large' genes: $this->{X_THRESH_GENE_SIZE}
 #    (note that this boundary may be modified for some cancers)
 # highest allowable Y-threshold: $this->{Y_MAX}\n#
@@ -407,9 +412,9 @@ sub usage_text {
         USAGE 
 
             music2 long-gene-filter [--data-file=?] [--smg-file=?] [--smg-column=?]
-            [--gene-size-file] [--pass-file=?] [--fail-file=?] [--new-fail-file=?]
+            [--gene-size-file] [--pass-file=?] [--fail-file=?] [--lgf-fail-file=?]
             [--x-thresh-gene-size=?] [--x-incr=?] [--y-thresh-fixed=?] [--y-max=?]
-            [--y-incr=?] [--pvalue-threshold=?]
+            [--y-incr=?] [--pvalue-threshold=?] [log-zero-P=?]
             [--y-thresh-l-min=?] [--y-thresh-l-dec=?]
 
         SEE ALSO
@@ -448,16 +453,22 @@ sub help_text {
             If reading smg-file, define column which contains P-values used for calculations.
             First column (containing genes) is 1.  Default 9.
 
+        log-zero-P
+
+            If smg-file has a P-value of 0, define value -log10(P-value) (since -infinity is 
+            inconvenient).  Default 25.
+
         gene-size-file
     
             File in TSV format defining gene sizes in base pairs (col 2) for given gene (col 1).
             Genes must be unique, and all genes in smg-file must exist in gene-size-file. Argument
             requred if data-file not defined.
 
-        pass-file, fail-file, new-fail-file
+        pass-file, fail-file, lgf-fail-file
 
-            Output filenames.  Genes which pass, fail, and fail because of increased y_thresh_r 
-            get written to these files respectively.  See below for details.  Optional.
+            Output filenames.  Genes which pass, fail, and fail because of Long Gene Filter
+            (i.e., increased y_thresh_r) get written to these files respectively.  See below 
+            for details.  Optional.
 
         x-thresh-gene-size
 
@@ -525,8 +536,9 @@ sub help_text {
               filter is applied (indicated by " above) are a subset of Fail_Genes and are
               listed as New_Fail_Genes
 
-        Algorithm proceeds by adjusting (in order), y_thresh_r, x_thresh, y_thresh_l,
-        so that the 2x2 table test indicates no bias.  (TODO - clarify)
+              Algorithm proceeds by adjusting (in order), y_thresh_r, x_thresh, y_thresh_l,
+              until the 2x2 table test no longer indicates a correlation between p-value and
+              gene size. (TODO - clarify/confirm)
              
         (1) Goodness of fit 2x2 table test for each cancer in the form of
         of the numbers of genes in each of 2 categories: (long or not long) and
