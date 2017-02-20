@@ -7,25 +7,103 @@ use warnings;
 # libraries
 use Statistics::Distributions;
 use Scalar::Util qw(looks_like_number);
-
-
 use Carp;  # Use carp/croak/confess for improved error handling http://perldoc.perl.org/Carp.html
 use IO::File;
 use Getopt::Long;
 
+sub new {
+    my $class = shift;
+    my $this = {};
+
+    $this->{DATA_FILE} = undef;
+    $this->{SMG_FILE} = undef;
+    $this->{SMG_COLUMN} = 9;
+    $this->{GENE_SIZE_FILE} = undef;
+    $this->{WARN_NO_SIZE} = 0;
+    $this->{PASS_FILE} = undef;
+    $this->{FAIL_FILE} = undef;
+    $this->{LGF_FAIL_FILE} = undef;
+    $this->{WRITE_DETAILS} = 0;
+    $this->{X_THRESH_GENE_SIZE} = 5000;
+    $this->{X_INCR} = 500;
+    $this->{Y_THRESH_FIXED} = 8;
+    $this->{Y_THRESH_L_MIN} = 6;
+    $this->{Y_THRESH_L_DEC} = 0.5;
+    $this->{Y_MAX} = 18;
+    $this->{Y_INCR} = 0.1;
+    $this->{PVALUE_THRESHOLD} = 0.005;
+    $this->{LOG_ZERO_P} = 25;
+
+    bless $this, $class;
+    $this->process();
+    return $this;
+}
+
+sub process {
+    my $this = shift;
+    my ( $help, $options );
+    unless( @ARGV ) { die $this->help_text(); }
+    $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
+            'data-file=s'           => \$this->{DATA_FILE},
+            'smg-file=s'            => \$this->{SMG_FILE},
+            'smg-column=i'          => \$this->{SMG_COLUMN},
+            'warn-no-size'          => \$this->{WARN_NO_SIZE},
+            'log-zero-p=f'          => \$this->{LOG_ZERO_P},
+            'gene-size-file=s'      => \$this->{GENE_SIZE_FILE},
+            'pass-file=s'           => \$this->{PASS_FILE},
+            'fail-file=s'           => \$this->{FAIL_FILE},
+            'write-details'         => \$this->{WRITE_DETAILS},
+            'lgf-fail-file=s'       => \$this->{LGF_FAIL_FILE},
+            'x-thresh-gene-size=i'  => \$this->{X_THRESH_GENE_SIZE},
+            'x-incr=i'              => \$this->{X_INCR},
+            'y-thresh-fixed=f'      => \$this->{Y_THRESH_FIXED},
+            'y-thresh-l-min=f'      => \$this->{Y_THRESH_L_MIN},
+            'y-thresh-l-dec=f'      => \$this->{Y_THRESH_L_DEC},
+            'y-max=f'               => \$this->{Y_MAX},
+            'y-incr=f'              => \$this->{Y_INCR},
+            'pvalue-threshold=f'    => \$this->{PVALUE_THRESHOLD},
+            'help' => \$help,
+            );
+
+    if ( $help ) { print STDERR help_text(); exit 0; }
+    unless( $options ) { die $this->usage_text(); }
+
+    my ($pts, $gene_data);
+    if ($this->{DATA_FILE}) {
+        ($pts, $gene_data) = $this->read_data_file($this->{DATA_FILE});
+    } else {
+        my $gene_sizes = $this->get_gene_sizes($this->{GENE_SIZE_FILE});
+        my $smg_pval = $this->get_smg_pval($this->{SMG_FILE}, $this->{SMG_COLUMN});
+        ($pts, $gene_data) = $this->merge_pval_size($gene_sizes, $smg_pval);
+    }
+
+    $this->print_header();
+    $this->apply_filter($pts, $gene_data, $this->{PASS_FILE}, $this->{FAIL_FILE}, $this->{LGF_FAIL_FILE});
+}
+
+# $genes is a pointer to an array of [$gene_name, $x, $y]
 sub write_genes {
     my ($this, $fn, $genes) = @_;
     my $DF = IO::File->new( $fn, 'w' ) or die "Couldn't open $fn. $!\n";
-    foreach my $gene (@{$genes}) {
-        print $DF "$gene\n";
+    if ($this->{WRITE_DETAILS}) {
+        print $DF "# gene_name\tgene_size\t-log10(P-value)\n";
+    } else {
+        print $DF "# gene_name\n";
+    }
+    foreach my $gene_data (@{$genes}) {
+        my ($gene_name, $x, $y) = @{$gene_data};
+        if ($this->{WRITE_DETAILS}) {
+            #print $DF "$gene_name\t$x\t$y\n";
+            printf($DF "%s\t%d\t%0.5f\n", $gene_name, $x, $y); 
+        } else {
+            print $DF "$gene_name\n";
+        }
     }
     $DF->close;
 }
 
 
-# run filter algorithm by cycling through parameters and evaluate convergence.
-# Write filtered genes to files if convergence occurs and return 1; return 0 if
-# convergence fails.
+# run filter algorithm by cycling through filter parameters and evaluate convergence.
 sub apply_filter {
     my ($this, $pts, $gene_data, $pass_fn, $fail_fn, $lgf_fail_fn) = @_;
     my $iters = 0;
@@ -35,12 +113,10 @@ sub apply_filter {
         print"#   trying y_thresh_l cutoff $y_thresh_l\n";
 
 # x-threshold that delineates typical vs large genes
-        for (my $x_thresh = $this->{X_THRESH_GENE_SIZE}; $x_thresh > $this->{X_INCR};
-                $x_thresh -= $this->{X_INCR}) {
+        for (my $x_thresh = $this->{X_THRESH_GENE_SIZE}; $x_thresh > $this->{X_INCR}; $x_thresh -= $this->{X_INCR}) {
 
 # move y-threshold upward for large genes until significance vanishes
-            for (my $y_thresh_r = $y_thresh_l; $y_thresh_r <= $this->{Y_MAX};
-                    $y_thresh_r += $this->{Y_INCR}) {
+            for (my $y_thresh_r = $y_thresh_l; $y_thresh_r <= $this->{Y_MAX}; $y_thresh_r += $this->{Y_INCR}) {
 
                 if ($this->evaluate_long_filter($pts, $x_thresh, $y_thresh_l, $y_thresh_r)) {
                     my ($pass_genes, $fail_genes, $lgf_fail_genes) = $this->get_filtered_genes($gene_data, $x_thresh, $y_thresh_l, $y_thresh_r);
@@ -106,6 +182,9 @@ sub print_diagnostics {
         "(mutational significance status not statistically related to gene size)\n";
 }
 
+# for all genes, return as arrays those which pass filter, fail filter, and those
+# which would pass filter if y_thresh_r = y_thresh_l.
+# returned arrays have entries [gene_name, x, y]
 sub get_filtered_genes {    
     my ($this, $gene_data, $x_thresh, $y_thresh_l, $y_thresh_r) = @_;
 
@@ -118,12 +197,12 @@ sub get_filtered_genes {
         foreach my $x (keys %{$gene_data->{$y}}) {
             foreach my $gene_name (keys %{$gene_data->{$y}->{$x}}) {
                 if ($x > $x_thresh && $y > $y_thresh_l && $y < $y_thresh_r) {
-                    push(@{$lgf_fail_genes}, $gene_name);
-                    push(@{$fail_genes}, $gene_name);
+                    push(@{$lgf_fail_genes}, [$gene_name, $x, $y]);
+                    push(@{$fail_genes}, [$gene_name, $x, $y]);
                 } elsif ($y <= $y_thresh_l) {
-                    push(@{$fail_genes}, $gene_name);
+                    push(@{$fail_genes}, [$gene_name, $x, $y]);
                 } else {
-                    push(@{$pass_genes}, $gene_name);
+                    push(@{$pass_genes}, [$gene_name, $x, $y]);
                 }
             }
         }
@@ -132,74 +211,6 @@ sub get_filtered_genes {
 }
 
 
-sub new {
-    my $class = shift;
-    my $this = {};
-
-    $this->{DATA_FILE} = undef;
-    $this->{SMG_FILE} = undef;
-    $this->{SMG_COLUMN} = 9;
-    $this->{GENE_SIZE_FILE} = undef;
-    $this->{PASS_FILE} = undef;
-    $this->{FAIL_FILE} = undef;
-    $this->{LGF_FAIL_FILE} = undef;
-    $this->{X_THRESH_GENE_SIZE} = 5000;
-    $this->{X_INCR} = 500;
-    $this->{Y_THRESH_FIXED} = 8;
-    $this->{Y_THRESH_L_MIN} = 6;
-    $this->{Y_THRESH_L_DEC} = 0.5;
-    $this->{Y_MAX} = 18;
-    $this->{Y_INCR} = 0.1;
-    $this->{PVALUE_THRESHOLD} = 0.005;
-    $this->{LOG_ZERO_P} = 25;
-
-    bless $this, $class;
-    $this->process();
-
-    return $this;
-}
-
-
-sub process {
-    my $this = shift;
-    my ( $help, $options );
-    unless( @ARGV ) { die $this->help_text(); }
-    $options = GetOptions (  # http://search.cpan.org/~chips/perl5.004_05/lib/Getopt/Long.pm
-            'data-file=s'           => \$this->{DATA_FILE},
-            'smg-file=s'            => \$this->{SMG_FILE},
-            'smg-column=i'          => \$this->{SMG_COLUMN},
-            'log-zero-p=f'          => \$this->{LOG_ZERO_P},
-            'gene-size-file=s'      => \$this->{GENE_SIZE_FILE},
-            'pass-file=s'           => \$this->{PASS_FILE},
-            'fail-file=s'           => \$this->{FAIL_FILE},
-            'lgf-fail-file=s'       => \$this->{LGF_FAIL_FILE},
-            'x-thresh-gene-size=i'  => \$this->{X_THRESH_GENE_SIZE},
-            'x-incr=i'              => \$this->{X_INCR},
-            'y-thresh-fixed=f'      => \$this->{Y_THRESH_FIXED},
-            'y-thresh-l-min=f'      => \$this->{Y_THRESH_L_MIN},
-            'y-thresh-l-dec=f'      => \$this->{Y_THRESH_L_DEC},
-            'y-max=f'               => \$this->{Y_MAX},
-            'y-incr=f'              => \$this->{Y_INCR},
-            'pvalue-threshold=f'    => \$this->{PVALUE_THRESHOLD},
-            'help' => \$help,
-            );
-
-    if ( $help ) { print STDERR help_text(); exit 0; }
-    unless( $options ) { die $this->usage_text(); }
-
-    my ($pts, $gene_data);
-    if ($this->{DATA_FILE}) {
-        ($pts, $gene_data) = $this->read_data_file($this->{DATA_FILE});
-    } else {
-        my $gene_sizes = $this->get_gene_sizes($this->{GENE_SIZE_FILE});
-        my $smg_pval = $this->get_smg_pval($this->{SMG_FILE}, $this->{SMG_COLUMN});
-        ($pts, $gene_data) = $this->merge_pval_size($gene_sizes, $smg_pval);
-    }
-
-    $this->print_header();
-    $this->apply_filter($pts, $gene_data, $this->{PASS_FILE}, $this->{FAIL_FILE}, $this->{LGF_FAIL_FILE});
-
-}
 
 sub _numeric_ {$a <=> $b}  # used for string/number comparisons
 
@@ -268,7 +279,15 @@ sub merge_pval_size {
 
     # iterate over all genes in smg_file
     foreach my $gene_name (keys %{$smg_pval}) {
-        die("Size of gene $gene_name not defined in $this->{GENE_SIZE_FILE}\n") if not exists $gene_sizes->{$gene_name};
+        if (not exists $gene_sizes->{$gene_name}) {
+            my $msg = "Size of gene $gene_name not defined in $this->{GENE_SIZE_FILE}.";
+            if ($this->{WARN_NO_SIZE}) {
+                warn("$msg. Ignoring. \n");
+                next;
+            } else {
+                die("$msg. Quitting. \n");
+            }
+        }
         my $x = $gene_sizes->{$gene_name};
         my $y = $smg_pval->{$gene_name};
         push @{$pts}, [$x, $y];
@@ -410,8 +429,8 @@ sub usage_text {
             music2 long-gene-filter [--data-file=?] [--smg-file=?] [--smg-column=?]
             [--gene-size-file] [--pass-file=?] [--fail-file=?] [--lgf-fail-file=?]
             [--x-thresh-gene-size=?] [--x-incr=?] [--y-thresh-fixed=?] [--y-max=?]
-            [--y-incr=?] [--pvalue-threshold=?] [log-zero-P=?]
-            [--y-thresh-l-min=?] [--y-thresh-l-dec=?]
+            [--y-incr=?] [--pvalue-threshold=?] [log-zero-P=?] [--warn-no-size]
+            [--y-thresh-l-min=?] [--y-thresh-l-dec=?] [--write-details]
 
         SEE ALSO
 
@@ -460,11 +479,21 @@ sub help_text {
             Genes must be unique, and all genes in smg-file must exist in gene-size-file. Argument
             requred if data-file not defined.
 
+        warn-no-size
+
+            By default, each gene in smg-file must have entry in gene-size-file, and it is a fatal
+            error if it does not.  With warn-no-size flag, a warning is issued and gene is ignored.
+
         pass-file, fail-file, lgf-fail-file
 
             Output filenames.  Genes which pass, fail, and fail because of Long Gene Filter
             (i.e., increased y_thresh_r) get written to these files respectively.  See below 
             for details.  Optional.
+
+        write-details
+
+            When writing output (pass, fail, lgf-fail files), in addition to gene names, also write gene 
+            size and -log10(P-value) as columns 2, 3 in TSV format (i.e., data-file format).
 
         x-thresh-gene-size
 
