@@ -8,6 +8,32 @@ use POSIX qw( WIFEXITED );
 use Getopt::Long;
 use File::Temp qw/ tempfile /;
 
+# TODO: 
+#
+# work through logic of defaults for use-maf-in-glm, skip-non-coding, skip-silent
+# since =! does not seem to work...  make docs consistent.
+
+# Separating GLM and non-glm functionality would be easier for software maintenance and usability,
+# since these functionalities have little in common.
+
+# For GLM, workflow should be 1) create mutation matrix file from MAF and 2) perform correlation.
+# These steps should be separate from the user's point of view; keeping them together leads to unnecessary
+# parameters and complicated logic.
+
+# break up the logic into more manageable and testable pieces
+
+# consider in clinical correlation only those participants which are found in trait and variant data
+# see /Users/mwyczalk/Data/MuSiC2/MuSiC.ClinicalCorrelation.TCGA_Virus/src/VariantTraitMaker.R
+
+# treat B and Q together. Make sure they have the same output format
+
+# There seem to be random numerical errors during non-convergence.  Catch these cases and don't print them out
+# Types of errors we observe which should be handled cleanly:
+# * Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
+# * Warning: glm.fit: algorithm did not converge
+# * Error in `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]) :
+#     contrasts can be applied only to factors with 2 or more levels
+#       Error caught, continuing.  yi = clinical_M.is.M0  xi = BK.int  covi = Disease
 
 # Use Smg.pm as model for MuSiC2 patterns
 sub new {
@@ -56,10 +82,13 @@ sub process {
         'categorical-clinical-data-file=s'          => \$this->{CATEGORICAL_CLINICAL_DATA_FILE},
         'glm-model-file=s'                          => \$this->{GLM_MODEL_FILE},
         'glm-clinical-data-file=s'                  => \$this->{GLM_CLINICAL_DATA_FILE},
-        'use-maf-in-glm=!'                          => \$this->{USE_MAF_IN_GLM},
-        'skip-non-coding=!'                         => \$this->{SKIP_NON_CODING},
-        'skip-silent=!'                             => \$this->{SKIP_SILENT},
-        'skip-correlation=1'                        => \$this->{SKIP_CORRELATION},
+        'use-maf-in-glm'                          => \$this->{USE_MAF_IN_GLM},
+        'skip-non-coding'                         => \$this->{SKIP_NON_CODING},
+        'skip-silent'                             => \$this->{SKIP_SILENT},
+        #'use-maf-in-glm=!'                          => \$this->{USE_MAF_IN_GLM},
+        #'skip-non-coding=!'                         => \$this->{SKIP_NON_CODING},
+        #'skip-silent=!'                             => \$this->{SKIP_SILENT},
+        'skip-correlation'                          => \$this->{SKIP_CORRELATION},
         'help' => \$help,
     );
 
@@ -67,17 +96,9 @@ sub process {
     unless( $options ) { die $this->usage_text(); }
 
 
-# TODO
 
-# Separating GLM and non-glm functionality would be easier for software maintenance and usability,
-# since these functionalities have little in common.
 
-# For GLM, workflow should be 1) create mutation matrix file from MAF and 2) perform correlation.
-# These steps should be separate from the user's point of view; keeping them together leads to unnecessary
-# parameters and complicated logic.
-
-# break up the logic into more manageable and testable pieces
-
+### Implementation notes ###
 # conversion GMS -> MuSiC2
 # * convert $self to $this
 # * error_message is {warn(""); return}
@@ -434,37 +455,37 @@ sub help_text {
     return $usage . <<HELP
 
 REQUIRED INPUTS 
-  output_file 
+  output-file 
     Results of clinical-correlation tool. Will have suffix added for data type
 
 OPTIONAL INPUTS 
-    bam_list 
-        Tab delimited list of BAM files [sample_name, normal_bam, tumor_bam], optional if mutation matrix is supplied. (See Description)
-    maf_file 
+    bam-list 
+        Tab delimited list of BAM files [sample-name, normal-bam, tumor-bam], optional if mutation matrix is supplied. (See Description)
+    maf-file 
         List of mutations using TCGA MAF specification v2.3
-    clinical_correlation_matrix_file 
+    clinical-correlation-matrix-file 
         Specify a file to store the sample-vs-gene matrix created during calculations
-    input_clinical_correlation_matrix_file 
+    input-clinical-correlation-matrix-file 
         Instead of creating this from the MAF, input the sample-vs-gene matrix for calculations
-    genetic_data_type 
+    genetic-data-type 
         Correlate clinical data to "gene" or "variant" level data.  Default "gene"
-    numeric_clinical_data_file 
+    numeric-clinical-data-file 
         Table of samples (y) vs. numeric clinical data category (x)
-    numerical_data_test_method 
+    numerical-data-test-method 
         Either 'cor' for Pearson Correlation or 'wilcox' for the Wilcoxon Rank-Sum Test for numerical clinical data.  Default 'wilcox',
-    categorical_clinical_data_file 
+    categorical-clinical-data-file 
         Table of samples (y) vs. categorical clinical data category (x)
-    glm_model_file 
+    glm-model-file 
         File outlining the type of model, response variable, covariants, etc. for the GLM analysis. (See DESCRIPTION)
-    glm_clinical_data_file 
+    glm-clinical-data-file 
         Clinical traits, mutational profiles, other mixed clinical data (See DESCRIPTION)
-    use_maf_in_glm 
+    use-maf-in-glm 
         Create a variant matrix from the MAF file as variant input to GLM analysis.  
         Default value 'false' if not specified, add prefix "no" to negate
-    skip_non_coding 
+    skip-non-coding 
         Skip non-coding mutations from the provided MAF file. 
         Default value 'true' if not specified, add prefix "no" to negate
-    skip_silent 
+    skip-silent 
         Skip silent mutations from the provided MAF file.  
         Default value 'true' if not specified, add prefix "no" to negate
     skip_correlation 
