@@ -36,6 +36,10 @@ Key commands:
     smg                         Identify significantly mutated genes.
     survival                    Create survival plots and P-values for clinical and mutational phenotypes.      
 
+One-liner installer
+-------------------
+If you have [conda](https://conda.io/docs/intro.html) installed:   
+`conda install -c pwwang genomemusic2`
 
 Install (Ubuntu 14.04.01)
 -------
