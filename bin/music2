@@ -92,6 +92,7 @@ proximity                   Perform a proximity analysis on a list of mutations.
 proximity-window            Perform a sliding window proximity analysis on a list of mutations.
 smg                         Identify significantly mutated genes.
 survival                    Create survival plots and P-values for clinical and mutational phenotypes.  
+variant-from-maf            Create a variant file from MAF input, for use with clinical-correlation.  TODO
 
 help      this message
 

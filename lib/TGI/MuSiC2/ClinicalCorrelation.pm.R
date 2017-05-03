@@ -1,324 +1,241 @@
+# MuSiC2 ClinicalCorrelation
+
+# by Qunyuan Zhang (qunyuan@wustl.edu)
+# Matthew Wyczalkowski (m.wyczalkowski@wustl.edu)
+
+# Usage: 
+#   Rscript ClinicalCorrelation.pm [-v][-d] model.file variant.file trait.file out.file 
+
+# This program is for Generalized Linear Model (GLM) analysis
+# Y = X + covariate_1 + covariate_2 ......
+# 
+# Y is a quantitative or categorical trait (e.g., clinical trait)
+# X is a quantitative or categorical variant (e.g., gene or mutation)
+
+# Canonical Names:
+# X - variant.  Aka matrix_file
+# Y - trait.  Aka clinical_data
+
 options(warn=1) 
-#determine which test method to use
-method = as.character(commandArgs()[4]);
+options("width"=200) # DEBUG
 
-if (method == "glm") {
 
-    ### This program is for Generalized Linear Model (GLM) analysis
-    ### Y = X + covar1 + covar2 ......
-    ### Usually (not limited),
-    ### Y is clinical trait (quantitative or binary)
-    ### X is variant/gene/mutation etc.
-    ### covar means covariate
-    ### by Qunyuan Zhang (qunyuan@wustl.edu), 02/16/2012 updated 
+# Return the command line argument associated with a given flag (i.e., -o foo),
+# or the default value if argument not specified.
+# Note that this will break if an argument is not supplied after the flag.
+get_val_arg = function(args, flag, default) {
+    ix = pmatch(flag, args)
+    if (!is.na(ix)){ val = args[ix+1] } else { val = default }
+    return(val)
+}
 
-    ### input options
-    model.file = as.character(commandArgs()[5]);
-    y.file = as.character(commandArgs()[6]);
-    x.file = as.character(commandArgs()[7]);
-    out.file = as.character(commandArgs()[8]);
-    x.names=NULL;
+# Return boolean specifying whether given flag appears in command line (i.e., -o),
+get_bool_arg = function(args, flag) {
+    ix = pmatch(flag, args)
+    if (!is.na(ix)){ val = TRUE } else { val = FALSE }
+    return(val)
+}
 
-    ### to run it on command line, type
-    # R --no-save < glm.R model.file y.file x.file * out.csv
-    # or (if you want to define x variables)
-    # R --no-save < glm.R model.csv y.file x.file x1|x2|x3 out.csv
-    # or (if x.file has been merged into y.file)
-    # R --no-save < glm.R model.csv y.file * x1|x2|x3 out.csv
-    # or (if you have defined x variable in model.file)
-    # R --no-save < glm.R model.csv y.file * * out.csv
+# Usage:
+#   args = parse.args()
+#   print(args$disease.filter)
+parse.args = function() {
+    args = commandArgs(trailingOnly = TRUE)
 
-    ### about model.file 
-    # column "type":  Q=quantitative trait, B=binary trait
-    # column "y":     trait name
-    # colum  "x":     variant/gene name; if x=NA or blank, it will determined by x.file and x.names
-    # column "cvar":  covariate(s)
-    # tab delimited 
+    # optional arguments
+    verbose = get_bool_arg(args, "-v")
+    debug = get_bool_arg(args, "-d")
 
-    ### about y.file 
-    # trait data file, column 1 must be sample id 
-    # tab delimited 
+    # mandatory positional arguments.  These are popped off the back of the array, last one listed first.
+    out.file = args[length(args)];      args = args[-length(args)]
+    trait.file = args[length(args)];    args = args[-length(args)]
+    variant.file = args[length(args)];  args = args[-length(args)]
+    model.file = args[length(args)];    args = args[-length(args)]
 
-    ### about x.file
-    # usually mutation/variant/geene data file 
-    # the first column must be sample id (the same as in y.file, ordered or not)
-    # tab delimited  
-    # x.file="*" if x.file already merged into y.file 
+    val = list('verbose'=verbose, 'debug'=debug, 'out.file'=out.file, 
+               'variant.file'=variant.file, 'trait.file'=trait.file, 'model.file'=model.file)
+    if (val$verbose) { print(val) }
 
-    ### about x.names
-    # x.names="*" will use all column names in x.file as x variable names
-    # or you can define it in the format x.names="gene1|gene2|gene3"
-    # self-defined x.names have to be found in column names of y.file and/or x.file  
+    return (val)
+}
 
-    #################### myglm fuction ##############
-    # This will crash if trait is all NA
-    myglm=function(z,trait,variant,covar=NA,ytype) {
-        if (nchar(covar)==0 | is.na(covar) | is.null(covar)) { 
-            model=formula(paste(trait,"~",variant)) 
-        } else {
-            # model=formula(paste(trait,"~",variant,"+",covar)) # this is incorrect, as per Qunyuan discussion 2/21/14
-            model=formula(paste(trait,"~",covar,"+",variant))
+
+# model.file is TSV with columns:
+# "type":  Q=quantitative trait, B=binary trait
+# "model.trait.name":     trait name
+# "model.variant.name.string":     variant/gene name; if x=NA or blank, it will be determined by variant.file and all.variant.names
+# "model.covariate":  covariate(s)
+# "memo":  arbitrary text 
+
+# trait.file is TSV with column headers, column 1 sample ID
+
+# variant.file is TSV data file 
+# the first column must be sample id (the same as in trait.file)
+# must be defined 
+
+# Multiple variants can be deefined in model with, model.variant.name.string="var_1|var_2|var_3"
+# if model.variant.name.string *, "NA", or blank, will use all column names in variant.file as x variable names
+# these must be found in column names of variant.file  
+
+# This will crash if trait is all NA
+do.glm=function(merged.data,trait,variant,covariate=NA,analysis.type) {
+
+    if (!is.na(covariate)) {
+        if (length(levels(merged.data[,c(covariate)])) == 1) {
+            warning("One level in covariate detected.  Not doing covariate.");
+            covariate = NA
         }
-        
-        if (ytype=="B") fit=glm(formula=model,data=z,family=binomial(link = "logit"))
-        if (ytype=="Q") fit=glm(formula=model,data=z,family=gaussian(link = "identity"))
-        fit
     }
-    #################################################
+#    print(merged.data[,c(variant, trait)])
+#    print(covariate)
 
-    options("width"=200) # DEBUG
+    if (nchar(covariate)==0 | is.na(covariate) | is.null(covariate)) { 
+        model=formula(paste(trait,"~",variant)) 
+    } else {
+        model=formula(paste(trait,"~",covariate,"+",variant))
+    }
 
-    ### data input #####
-    read.table(model.file,colClasses="character",na.strings = c("","NA"),sep="\t",header=T)->md
-    read.table(y.file,na.strings = c("","NA"),sep="\t",header=T)->y
-    #if (x.names!="*") x.names=strsplit(x.names,split="[|]")[[1]]
+    if (analysis.type=="B") 
+        family=binomial(link = "logit")
+    if (analysis.type=="Q") 
+        family=gaussian(link = "identity")
+    fit=glm(formula=model,data=merged.data,family=family)
+    return(fit)
+}
 
-    # TODO: Here, it would be smart to check whether all model names (md[,2]) correspond to columns in y.
+get.merged.variant.trait.data = function(trait.file, variant.file) {
+    trait.data = read.table(trait.file,na.strings = c("","NA"),sep="\t",header=T)
+
+    # TODO: Here, it would be smart to check whether all model names (model[,2]) correspond to columns in y.
     # obscure errors result if people mistype or use remapped characters (:-<=>)
 
+    variant.data = read.table(variant.file,na.strings = c("","NA"),sep="\t",header=T)
+    variant.id = colnames(variant.data)[1]
+    all.variant.names = colnames(variant.data)[-1]  # all variant data column names except the first
 
+    trait.id = colnames(trait.data)[1]
+    ysid = !(colnames(trait.data) %in% all.variant.names)  # ysid are trait names not in variant names
+    trait.data = trait.data[,ysid]                     # Subset trait data to those columns not in variant data (?)
 
-    if (x.file!="*")
-    {
-        read.table(x.file,na.strings = c("","NA"),sep="\t",header=T)->x
-        xid=colnames(x)[1]
-        xs=colnames(x)[-1]
-        #if (x.names!="*") {x=x[,c(xid,x.names)];xs=colnames(x)[-1]}
-        x.names=xs
-        yid=colnames(y)[1]
-        ysid = ! (colnames(y) %in% xs)
-        y=y[,ysid]
-        if (sum(ysid)==1) {y=data.frame(id=y);colnames(y)[1]=yid}
-        #y=merge(y,x,by.x = xid, by.y = yid)
-        y=merge(x,y,by.x = xid, by.y = yid)
+    if (sum(ysid)==1) {  # ???  This seems to imply complete overlap in column names between variant and trait
+        trait.data = data.frame(id=trait.data)
+        colnames(trait.data)[1] = trait.id
     }
-    if (is.null(x.names)) x.names=colnames(y)[-1];
 
-    ######### analysis ##########
-    tt=NULL
-    for (i in c(1:nrow(md)))  # loop through all rows in model
-    {
-        # analysis_type   clinical_data_trait_name    variant/gene_name   covariates  memo
-        ytype=md[i,1];yi=md[i,2];xs=md[i,3];covi=md[i,4];memo=md[i,5]
+    # Variant and trait data merged here
+    merged.data=merge(variant.data,trait.data,by.x = variant.id, by.y = trait.id)
 
-        if (!is.na(xs) & nchar(xs)>0) xs=strsplit(xs,split="[|]")[[1]]
-        if (is.na(xs)[1]|nchar(xs)[1]==0|xs=="*") xs=x.names 
-        if (length(covi)==0) covi=NA
-        for (xi in xs)
-        {
-            # DEBUG
-            #cat(paste("    Processing: yi =", yi, " xi =", xi, " covi =", covi, "\n") )
+    return( list('merged.data'=merged.data, 'all.variant.names'=all.variant.names) )
+}
 
-            if (ytype=="Q") {
-                test = "F"
-            } else if (ytype=="B") {
-                test = "Chisq"
-            } else {
-                stop("Unknown model ytype ", ytype) 
+run.analysis = function(model, merged.data, all.variant.names, debug=FALSE) {
+    glm.results=NULL
+
+    for (i in c(1:nrow(model))) {  # loop through all rows in model  TODO: rewrite using apply()
+    # analysis_type   clinical_data_trait_name    variant/gene_name   covariates  memo
+        analysis.type=model[i,1]
+        model.trait.name=model[i,2]
+        model.variant.name.string=model[i,3]
+        model.covariate=model[i,4]
+        memo=model[i,5]
+
+        model.variant.names = parse.variant.name.string(model.variant.name.string, all.variant.names)
+
+        if (length(model.covariate)==0) 
+            model.covariate=NA
+
+        for (variant.name in model.variant.names) {
+            if (debug) {
+                cat(paste("    Processing: trait =", model.trait.name, " variant =", variant.name, "analysis =", analysis.type, " covariate =", model.covariate, "\n") )
             }
-            glm = try(myglm(y,yi,xi,covi,ytype))  # MAW new
-            if(class(glm)[1] == "try-error") {
-                # Type of error to catch here:
-                #   Error in family$linkfun(mustart) : 
-                #     Argument mu must be a nonempty numeric vector
-                # This occurs if too many NA's
-                # This also occurs: Error in `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]) : contrasts can be applied only to factors with 2 or more levels
-                #    above happens when using covariate and e.g. disease BLCA has all NA even if other diseases do not
-                cat(paste("    Error caught, continuing.  yi =", yi, " xi =", xi, " covi =", covi, "\n") )
-                next
-            }
-            try(anova(glm,test=test))->fit
-            coeff = coefficients(glm)[[xi]] # MAW new
-            if (class(fit)[1]!="try-error")
-            {
-                fit=as.matrix(fit)
-                # line below dies if mix Q and B ytypes in a single model file
-                if (xi %in% rownames(fit)) tt=rbind(tt, cbind(yi,ytype,xi,as.data.frame(t(fit[xi,])),coeff,covi,memo))
+            result = evaluate.glm(analysis.type, merged.data, model.trait.name, variant.name, model.covariate) 
+            if (!is.null(result)) {
+                glm.results = rbind(glm.results, cbind(model.trait.name, analysis.type, variant.name, result$fit.result, result$coeff, model.covariate, memo))
             }
         }
     }
-    if (!is.null(tt)) {
-        #"yi","ytype","xi","Df","Deviance","Resid. Df","Resid. Dev","F","Pr(>F)","covi","memo"
-        if (ytype=="Q") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance",
-            "F_statistic","p-value","coefficient","covariants","memo");
-        if (ytype=="B") colnames(tt) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance",
-            "p-value","coefficient","covariants","memo");
-        tt$FDR = p.adjust(tt[,"p-value"], method="fdr") # MAW new, calculates FDR based on the method from,
-            # Benjamini, Y., and Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. Journal of the Royal Statistical Society Series B 57, 289–300.
-        write.table(tt,file=out.file,quote=F,sep="\t",row.names=F);
+
+#"model.trait.name","analysis.type","variant.name","Df","Deviance","Resid. Df","Resid. Dev","F","Pr(>F)","model.covariate","memo"
+    colnames(glm.results) = c("y","y_type","x","degrees_freedom","deviance","residual_degrees_freedom","residual_deviance", 
+                              "F_statistic","p-value","coefficient","covariates","memo")
+    glm.results$FDR = p.adjust(glm.results[,"p-value"], method="fdr") # Benjamini, Y., and Hochberg, Y. (1995). http://www.jstor.org/stable/2346101
+
+    return(glm.results)
+}
+
+parse.variant.name.string = function(model.variant.name.string, all.variant.names) {
+    if (!is.na(model.variant.name.string) & nchar(model.variant.name.string)>0) 
+        model.variant.names=strsplit(model.variant.name.string,split="[|]")[[1]]
+    if (is.na(model.variant.name.string)[1] | nchar(model.variant.name.string)[1]==0 | model.variant.name.string=="*") 
+        model.variant.names=all.variant.names 
+    return(model.variant.names)
+}
+
+evaluate.glm = function(analysis.type, merged.data, model.trait.name, variant.name, model.covariate) {
+# Returns result of glm analysis.  Columns are standardized so that B and Q return row of same column names
+
+    glm = try(do.glm(merged.data,model.trait.name,variant.name,model.covariate,analysis.type)) 
+
+    # Type of error to catch here:
+    #   Error in family$linkfun(mustart) : 
+    #     Argument mu must be a nonempty numeric vector
+    # This occurs if too many NA's
+    # This also occurs: Error in `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]) : contrasts can be applied only to factors with 2 or more levels
+    #    above happens when using covariate and e.g. disease BLCA has all NA even if other diseases do not
+
+    if(class(glm)[1] == "try-error") {
+        cat(paste("    Error caught in GLM, continuing.  model.trait.name =", model.trait.name, 
+                  " variant.name =", variant.name, " model.covariate =", model.covariate, "\n") )
+        return(NULL);
     }
 
-} else {
-
-    # else, we process numerical or categorical clinical data correlation
-
-    clinical_data = as.character(commandArgs()[5]);
-    mutation_matrix = as.character(commandArgs()[6]);
-    output_file = as.character(commandArgs()[7]);
-
-    # FUNCTION finds the correlation between two variables
-    cor2=function(ty,tx,method)
-    {
-
-        id=intersect(!is.na(ty),!is.na(tx));
-        ty=ty[id];
-        tx=tx[id];
-
-        if(method=="cor")
-        {
-            tst=cor.test(tx,ty);
-            s=tst$est;
-            p=tst$p.value;
-        }
-
-        if(method=="wilcox")  #x must be (0,1) mutation data
-        {
-            tst=wilcox.test(x=ty[tx==0],y=ty[tx>=1])
-            s=tst$stat
-            p=tst$p.value
-        }
-
-        if(method=="chisq")
-        {
-            tst=chisq.test(tx,ty);
-            s=tst$stat;
-            p=tst$p.value;
-        }
-
-        if(method=="fisher")
-        {
-            tst=fisher.test(tx,ty)
-            s=tst$p.value
-            p=tst$p.value
-        }
-
-        if(method=="anova")
-        {
-            tst=summary(aov(ty~tx,as.data.frame(cbind(tx,ty))))
-            s=tst[[1]]$F[1]
-            p=tst[[1]]$Pr[1]
-        }
-
-        tt=c(p,s);
-        tt;
+    if (analysis.type=="Q") {
+        test = "F"
+    } else if (analysis.type=="B") {
+        test = "Chisq"
+    } else {
+        stop("Unknown model analysis.type ", analysis.type) 
     }
-    # END cor2
 
-    # FUNCTION runs correlation test on matrixes of data
-    cor2test =function(y,x=NULL,method="cor",cutoff=1,sep="\t",outf=NULL)
-    {
+    fit = try(anova(glm,test=test))
+    coeff = coefficients(glm)[[variant.name]] 
+    if (class(fit)[1]!="try-error") {
+        fit=as.matrix(fit)
 
-        if (!is.null(x))
-        {
+        # Column names for Q: "Df"         "Deviance"   "Resid. Df"  "Resid. Dev" "F"          "Pr(>F)"
+        # Column names for B: "Df"         "Deviance"   "Resid. Df"  "Resid. Dev"           "Pr(>Chi)"
+        # To allow B and Q data to be mixed, we:
+        # 1. Add an "F" column with value "NA" to any B result
+        # 2. Rename last column to just "Pr"
 
-            if (length(x)==1) {read.table(x,header=T,sep=sep)->x;}
-            if (length(y)==1) {read.table(y,header=T,sep=sep)->y;}
-            colnames(y)[1]="id";
-            colnames(x)[1]="id";
-            tt=character(0);
-            for (vi in colnames(x)[-1])
-            {
-                for (vj in colnames(y)[-1])
-                {
-                    tx=x[,c("id",vi)];
-                    tx=tx[!is.na(tx[,vi]),];
-                    tx=tx[!duplicated(tx[,"id"]),];
-                    ty=y[,c("id",vj)];
-                    ty=ty[!is.na(ty[,vj]),];
-                    ty=ty[!duplicated(ty[,"id"]),];
-                    xy=merge(tx,ty,by.x="id",by.y="id");
-                    tx=xy[,2];
-                    ty=xy[,3];
-                    n=length(xy[,"id"]);
-                    rst=try(cor2(ty,tx,method));
-                    if (class(rst)=="try-error") {p=NA;s=NA;} else {p=rst[1];s=rst[2];}
-                    t=c(vi,vj,method,n,s,p)
+        if (variant.name %in% rownames(fit)) {
+            fit.result = as.data.frame(t(fit[variant.name,]))
+            if (analysis.type == "B") {
+                # want: Df Deviance "Resid. Df" "Resid. Dev" F "Pr(>F)"
+                fit.result$F=NA
+                fit.result=fit.result[,c(1:4,6,5)]
+            }
+            colnames(fit.result)[6] = "Pr"
 
-                    tt=rbind(tt,t);
-                } #end vj
-            } #end vi
+            glm.result = list('fit.result'=fit.result, 'coeff'=coeff)
 
-            rownames(tt)=NULL;
-            colnames(tt)=c("x","y","method","n","s","p");
-            tt=as.data.frame(tt);
-            tt[,"s"]=as.character(tt[,"s"]);
-            tt[,"s"]=as.numeric(tt[,"s"]);
-            tt[,"p"]=as.character(tt[,"p"]);
-            tt[,"p"]=as.numeric(tt[,"p"]);
-            fdr=p.adjust(tt[,"p"],method="fdr");
-            #bon=p.adjust(tt[,"p"],method="bon");
-            tt=cbind(tt,fdr);
-            tt=tt[order(tt[,"p"]),];
+            # if this is B, add $F_statistic
+            return(glm.result)
         }
-
-        if (is.null(x))
-        {
-
-            if (length(y)==1) {read.table(y,header=T,sep=sep)->y;}
-            x=y;
-            nxy=ncol(y)-1;
-            colnames(y)[1]="id";
-            colnames(x)[1]="id"
-            tt=character(0);
-            for (i in c(1:(nxy-1)))
-            {
-                for (j in c((i+1):nxy))
-                {
-
-                    vi=colnames(x)[-1][i];
-                    vj=colnames(y)[-1][j];
-
-                    tx=x[,c("id",vi)];
-                    tx=tx[!is.na(tx[,vi]),];
-                    tx=tx[!duplicated(tx[,"id"]),]
-                    ty=y[,c("id",vj)];
-                    ty=ty[!is.na(ty[,vj]),];
-                    ty=ty[!duplicated(ty[,"id"]),];
-                    xy=merge(tx,ty,by.x="id",by.y="id");
-                    tx=xy[,2];
-                    ty=xy[,3];
-                    n=length(xy[,"id"]);
-                    rst=try(cor2(ty,tx,method));
-                    if (class(rst)=="try-error") {p=NA;s=NA;} else {p=rst[1];s=rst[2];}
-                    t=c(vi,vj,method,n,s,p);
-                    tt=rbind(tt,t);
-                } #end vj
-            } #end vi
-
-            rownames(tt)=NULL;
-            colnames(tt)=c("x","y","method","n","s","p");
-            tt=as.data.frame(tt);
-            tt[,"s"]=as.character(tt[,"s"]);
-            tt[,"s"]=as.numeric(tt[,"s"]);
-            tt[,"p"]=as.character(tt[,"p"]);
-            tt[,"p"]=as.numeric(tt[,"p"]);
-            fdr=p.adjust(tt[,"p"],method="fdr");
-            #bon=p.adjust(tt[,"p"],method="bon");
-            tt=cbind(tt,fdr);
-            tt=tt[order(tt[,"p"]),];
-        }
-
-
-        if (!is.null(outf))
-        {
-            #colnames(tt)=c("x","y","method","n","s","p","fdr");
-            #The amount of precision that R prints with is somehow machine dependent (or the R version?)
-            tt[,"s"] = sapply(tt[,"s"], sprintf, fmt="%.4E");
-            tt[,"p"] = sapply(tt[,"p"], sprintf, fmt="%.4E");
-            tt[,"fdr"] = sapply(tt[,"fdr"], sprintf, fmt="%.2E");
-            #tt[,"bon"] = sapply(tt[,"bon"], sprintf, fmt="%.2E");
-
-            #The ordering should be done after reformatting the precision (duh)
-            tt=tt[order(tt[,"x"]),];
-            tt=tt[order(tt[,"p"]),];
-            #rename the column headers to something more pleasant
-            colnames(tt)=c("Gene","ClinParam","Method","NumCases","Statistic","Pval","FDR");
-            write.table(tt,file=outf,quote=FALSE,row.names=FALSE,sep="\t");
-        }
-        invisible(tt);
+    } else {
+        cat(paste("    Error caught in anova, continuing.  model.trait.name =", model.trait.name, 
+                  " variant.name =", variant.name, " model.covariate =", model.covariate, "\n") )
     }
-    #END cor2test
+    return(NULL);
+}
 
-    #run correlation test using function
-    cor2test(y = clinical_data, x = mutation_matrix, method = method, outf = output_file);
+
+args = parse.args()
+
+model = read.table(args$model.file,colClasses="character",na.strings = c("","NA"),sep="\t",header=T)
+data = get.merged.variant.trait.data(args$trait.file, args$variant.file)
+glm.results = run.analysis(model, data$merged.data, data$all.variant.names, args$debug)
+
+if (!is.null(glm.results)) {
+    write.table(glm.results,file=args$out.file,quote=F,sep="\t",row.names=F) 
 }
