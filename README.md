@@ -13,7 +13,7 @@ Usage
 
 Key commands:
 
-    bmr                    ...  Calculate gene coverages and background mutation  rates.
+    bmr                    ...  Calculate gene coverages and background mutation rates.
     clinical-correlation        Correlate phenotypic traits against mutated genes, or       
                                  against individual variants.
     cosmic                      Match a list of variants to those in COSMIC, and highlight  
@@ -110,5 +110,5 @@ example
 SUPPORT
 -------
 
-For user support please mail bniu@genome.wustl.edu
+For user support please mail bniu@sccas.cn
 
