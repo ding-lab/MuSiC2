@@ -79,6 +79,8 @@ create-visualizations       no description!!!: define doc in the class definitio
                              Genome::Model::Tools::Music::CreateVisualizations
 data                   ...  Parse, standardize, and index various third-party datasets  
                              used by the tools in MuSiC.
+dendrix                     Discovery of mutated driver pathways in cancer using only 
+                             mutation data. 
 long-gene-filter            Find conditions for which significance status is no longer 
                             related to gene size 
 mutation-relation           Identify relationships of mutation concurrency or mutual    
