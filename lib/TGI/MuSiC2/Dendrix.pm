@@ -144,6 +144,15 @@ ARGUMENTS
     
       Number of iterations of the MCMC between two samples
 
+OUTPUT
+
+     sets_frequencyOrder_experiment#j.txt: for each experiment, the 1000 sets sampled with highest frequency by 
+     the MCMC. One set per line, and the corresponding weight is reported. #j denote the number 
+     of the experiment (starting from 0).
+     sets_weightOrder_experiment#j.txt: for each experiment, the 1000 sets of highest weight sampled by the MCMC. 
+     One set per line, and the corresponding weight is reported. #j denote the number
+     of the experiment (starting from 0).
+
 EXAMPLE
 
     music2 dendrix --mutations-file example/dendrix/mutation_matrix --set-size 2 --minimum-freq 1 \

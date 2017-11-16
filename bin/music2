@@ -27,6 +27,7 @@ my %cmds = map{
       cosmic-omim 
       create-visualizations 
       data 
+      dendrix
       long-gene-filter
       mutation-relation 
       path-scan 
@@ -37,7 +38,6 @@ my %cmds = map{
       proximity-window 
       smg 
       survival 
-      dendrix 
       help );
 
 unless (defined $sub_cmd) { die help_text(); };
