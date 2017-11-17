@@ -104,7 +104,7 @@ sub process {
     #my $merged_roi_bed = "$this->{_OUTPUT_DIR}/.merged_bed_file";
     my ( undef, $merged_roi_bed ) = tempfile();
     #
-    system( "mergeBed -i $roi_bed | joinx1.7 sort -s - -o $merged_roi_bed" );
+    system( "mergeBed -i $roi_bed | joinx sort -s - -o $merged_roi_bed" );
     # or die "Failed to run mergeBed or joinx!\n$roi_bed\n$merged_roi_bed\n $!\n";
     #
     # Create the output directories unless they already exist
@@ -131,7 +131,7 @@ sub process {
         # Use joinx to parse the WIG file and return per-ROI 
         # coverages of AT, CG (non-CpG), and CpG
         #
-        system( "joinx1.7 wig2bed -Zc $wig_file | joinx1.7 sort -s | joinx1.7 intersect -F \"I A3\" $roi_bed - | joinx1.7 ref-stats - $this->{_REF_SEQ} | cut -f 1-7 > $roi_covg_dir/$sample.covg" );
+        system( "joinx wig2bed -Zc $wig_file | joinx sort -s | joinx intersect -F \"I A3\" $roi_bed - | joinx ref-stats - $this->{_REF_SEQ} | cut -f 1-7 > $roi_covg_dir/$sample.covg" );
         # or die "Failed to run joinx to calculate per-gene coverages in $sample! $!\n";
         #
         # Read the joinx formatted coverage file and count covered bases per gene
@@ -167,7 +167,7 @@ sub process {
         # Measure coverage stats on the merged ROI file, so that 
         # bps across the genome are not counted twice
         my ( undef, $merged_roi_bed_covg ) = tempfile();
-        system( "joinx1.7 wig2bed -Zc $wig_file | joinx1.7 sort -s | joinx1.7 intersect $merged_roi_bed - | joinx1.7 ref-stats - $this->{_REF_SEQ} | cut -f 1-6 > $merged_roi_bed_covg" );
+        system( "joinx wig2bed -Zc $wig_file | joinx sort -s | joinx intersect $merged_roi_bed - | joinx ref-stats - $this->{_REF_SEQ} | cut -f 1-6 > $merged_roi_bed_covg" );
         # or die "Failed to run joinx to calculate overall coverages in $sample! $!\n";
         #
         # Read the joinx formatted coverage file and sum up the coverage stats per region

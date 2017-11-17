@@ -270,7 +270,7 @@ sub process {
     # Run "joinx ref-stats" to classify SNVs as being at 
     # AT, CG, or CpG sites in the reference
     #
-    print STDERR "Running 'joinx1.7 ref-stats' to read reference FASTA and identify SNVs at AT, CG, CpG sites\n";
+    print STDERR "Running 'joinx ref-stats' to read reference FASTA and identify SNVs at AT, CG, CpG sites\n";
     #
     #my $maf_bed = "$this->{_OUTPUT_DIR}/.temp_maf_bed_file";
     my ( undef, $maf_bed ) = tempfile();
@@ -291,7 +291,7 @@ sub process {
     #my $refstats_file = "$this->{_OUTPUT_DIR}/.temp_refstats_file";
     #
     my ( undef, $refstats_file )  = tempfile();
-    `joinx1.7 ref-stats --ref-bases --bed $maf_bed --fasta $this->{_REF_SEQ} --output $refstats_file`;
+    `joinx ref-stats --ref-bases --bed $maf_bed --fasta $this->{_REF_SEQ} --output $refstats_file`;
     #
     #
     # Parse through the ref-stats output and load it 
