@@ -102,6 +102,8 @@ Install MuSiC2 package
         cd MuSiC2
         cpanm MuSiC2-#.#.tar.gz
 
+Notes: Python is needed to be installed if you run music2 dendrix & dendrix-permutation 
+
 example
 -------
 

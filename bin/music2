@@ -14,6 +14,7 @@ use Getopt::Long;
 use TGI::MuSiC2::Bmr;
 use TGI::MuSiC2::Smg;
 use TGI::MuSiC2::Dendrix;
+use TGI::MuSiC2::DendrixPermutation;
 #use TGI::MuSiC2::Survival;
 use TGI::MuSiC2::ClinicalCorrelation;
 use TGI::MuSiC2::LongGeneFilter;
@@ -28,6 +29,7 @@ my %cmds = map{
       create-visualizations 
       data 
       dendrix
+      dendrix-permutation
       long-gene-filter
       mutation-relation 
       path-scan 
@@ -50,7 +52,8 @@ SWITCH:{
     $sub_cmd eq 'bmr' && do { my $sub_cmd2 = shift; TGI::MuSiC2::Bmr->new( $sub_cmd2 ); last SWITCH; };
     $sub_cmd eq 'smg' && do { TGI::MuSiC2::Smg->new(); last SWITCH; };
     $sub_cmd eq 'dendrix' && do { TGI::MuSiC2::Dendrix->new(); last SWITCH; };
-#    $sub_cmd eq 'survival' && do { TGI::MuSiC2::Survival->new(); last SWITCH; };
+    $sub_cmd eq 'dendrix-permutation' && do { TGI::MuSiC2::DendrixPermutation->new(); last SWITCH; };
+#   $sub_cmd eq 'survival' && do { TGI::MuSiC2::Survival->new(); last SWITCH; };
 
     $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
     $sub_cmd eq 'long-gene-filter' && do { TGI::MuSiC2::LongGeneFilter->new(); last SWITCH; };
@@ -81,6 +84,8 @@ data                   ...  Parse, standardize, and index various third-party da
                              used by the tools in MuSiC.
 dendrix                     Discovery of mutated driver pathways in cancer using only 
                              mutation data. 
+dendri-permutation          Run the permutation test for Dendrix. 
+
 long-gene-filter            Find conditions for which significance status is no longer 
                             related to gene size 
 mutation-relation           Identify relationships of mutation concurrency or mutual    
