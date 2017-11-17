@@ -10,6 +10,7 @@ use File::Temp qw/ tempfile /;
 
 
 # Use Smg.pm as model for MuSiC2 patterns
+#
 sub new {
     my $class = shift;
     my $this = {};
