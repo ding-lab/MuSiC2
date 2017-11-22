@@ -686,6 +686,7 @@ sub mut_clustering {
             'Missense_Mutation'    => 'Missense', 
             'No_stop'              => 'Nonstop',
             'Nonstop'              => 'Nonstop',
+            'Nonstop_Mutation'     => 'Nonstop',
             'Readthrough'          => 'Nonstop',
         }->{$v_class} || "Other";
         $cluster_hash{$tumor_barcode}{$gene}{$v_class_format}{$p_line} = 1;
