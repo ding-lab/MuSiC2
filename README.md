@@ -112,5 +112,9 @@ example
 SUPPORT
 -------
 
-For user support please mail bniu@sccas.cn
+If you have any questions, please contact one or more of the following folks:
+
+Beifang Niu <bniu@sccas.cn>
+Cyriac Kandoth <ckandoth@gmail.com>
+Li Ding <lding@wustl.edu>
 
