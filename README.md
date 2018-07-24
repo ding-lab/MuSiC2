@@ -72,9 +72,9 @@ Install calcRoiCovg
 
 Install bedtools 
 
-        curl http://bedtools.googlecode.com/files/BEDTools.v2.17.0.tar.gz > BEDTools.tar.gz
-        tar -zxvf BEDTools.tar.gz
-        cd BEDTools-v2.17.0
+        wget https://github.com/arq5x/bedtools2/archive/v2.27.1.tar.gz
+        tar -zxvf v2.27.1.tar.gz
+        cd bedtools2-2.27.1/
         make
         sudo mv ./bin /usr/local/bin/
 
