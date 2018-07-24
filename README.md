@@ -93,6 +93,7 @@ Intall Test::Most module
         cpanm Test-Most-0.34.tar.gz
 
 Intall Statistics::Descriptive module
+
         cpanm Statistics::Descriptive
         cpanm Statistics::Distributions
 
