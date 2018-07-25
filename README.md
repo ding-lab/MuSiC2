@@ -37,34 +37,71 @@ Key commands:
     survival                    Create survival plots and P-values for clinical and mutational phenotypes.      
 
 
-Install (Ubuntu 14.04.01)
+Install (Ubuntu & CentOS)
 -------
 
-Prerequisites:
+Prerequisites for Ubuntu:
+
+        sudo apt-get install build-essential \
+        git \
+        cmake \
+        curl \
+        cpanminus
+        libbz2-dev \
+        libgtest-dev \
+        libbam-dev \
+        zlib1g-dev 
+
+Prerequisites for CentOS:
+
+        sudo yum install yum-utils
+        sudo yum install curl
+        sudo yum install git
+        sudo yum install cmake
+        sudo yum groupinstall "Development Tools"
+        sudo yum update -y nss curl libcurl
+        sudo yum install perl-devel
+        sudo yum install perl-CPAN
+        sudo yum install bzip2-libs
+        sudo yum install zlib-devel
+        sudo curl -L http://cpanmin.us | perl - --sudo App::cpanminus
+
+
+Change C++11 compiler for CentOS
+   Reference 
+> https://www.softwarecollections.org/en/scls/rhscl/devtoolset-3/ 
+
+# 1. Install a package with repository for your system:
+# On CentOS, install package centos-release-scl available in CentOS repository:
+
+        $ sudo yum install centos-release-scl
+
+# On RHEL, enable RHSCL repository for you system:
+
+        $ sudo yum-config-manager --enable rhel-server-rhscl-7-rpms
+
+# 2. Install the collection:
+
+        $ sudo yum install devtoolset-3
+
+# 3. Start using software collections:
+
+        $ scl enable devtoolset-3 bash
+
+# Set env variables --optional
+
+        CC=gcc CXX=g++ 
 
 Install samtools ( Download the samtools-0.1.19 from SOURCEFORGE (http://sourceforge.net/projects/samtools/files/samtools/0.1.19) )
 
         tar jxf samtools-0.1.19.tar.bz2
         cd samtools-0.1.19
         make
-        export SAMDIR=$PWD
+        export SAMTOOLS_DIR=$PWD
         sudo mv samtools /usr/local/bin/
-      
-Install joinx 
-
-        git clone --recursive https://github.com/genome/joinx.git
-        sudo apt-get install build-essential cmake libbz2-dev libgtest-dev
-        cd joinx
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=release
-        make deps
-        make
-        sudo make install
 
 Install calcRoiCovg 
 
-        sudo apt-get install git libbam-dev zlib1g-dev
         git clone https://github.com/Beifang/calcRoiCovg.git
         cd calc-roi-covg
         make
@@ -78,32 +115,40 @@ Install bedtools
         make
         sudo mv ./bin /usr/local/bin/
 
-In order to install MuSiC2 package, we need CPANM program
-(cpanm - get, unpack build and install modules from CPANM)
+Install joinx 
 
-        sudo apt-get install cpanminus
+        git clone --recursive https://github.com/genome/joinx.git
+        cd joinx
+        mkdir build
+        cd build
+        cmake ..
+        make deps
+        make
+        sudo make install
 
-Intall Perl5 local lib
+Fix joinx bugs
 
-        cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+        StreamLineSource.cpp
+        bool StreamLineSource::getline(std::string& line) {
+            std::getline(_in, line);
+            return true;
+        }
 
-Intall Test::Most module
-        
-        wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
-        cpanm Test-Most-0.34.tar.gz
+Intall Perl modules
 
-Intall Statistics::Descriptive module
-
-        cpanm Statistics::Descriptive
-        cpanm Statistics::Distributions
+        sudo cpanm Test::Most 
+        sudo cpanm Statistics::Descriptive
+        sudo cpanm Statistics::Distributions
+        sudo cpanm Bit::Vector
 
 Install MuSiC2 package
         
         git clone https://github.com/ding-lab/MuSiC2
         cd MuSiC2
-        cpanm MuSiC2-#.#.tar.gz
+        sudo cpanm MuSiC2-#.#.tar.gz
 
 Notes: Python is needed to be installed if you run music2 dendrix & dendrix-permutation 
+
 
 example
 -------
