@@ -71,24 +71,24 @@ Change C++11 compiler for CentOS
    Reference 
 > https://www.softwarecollections.org/en/scls/rhscl/devtoolset-3/ 
 
-# 1. Install a package with repository for your system:
-# On CentOS, install package centos-release-scl available in CentOS repository:
+    1. Install a package with repository for your system:
+    On CentOS, install package centos-release-scl available in CentOS repository:
 
         $ sudo yum install centos-release-scl
 
-# On RHEL, enable RHSCL repository for you system:
+    On RHEL, enable RHSCL repository for you system:
 
         $ sudo yum-config-manager --enable rhel-server-rhscl-7-rpms
 
-# 2. Install the collection:
+    2. Install the collection:
 
         $ sudo yum install devtoolset-3
 
-# 3. Start using software collections:
+    3. Start using software collections:
 
         $ scl enable devtoolset-3 bash
 
-# Set env variables --optional
+    Set env variables --optional
 
         CC=gcc CXX=g++ 
 
