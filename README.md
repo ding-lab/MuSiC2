@@ -39,6 +39,8 @@ Key commands:
 
 Install (Ubuntu & CentOS)
 -------
+Note: we provided binaries for joinx, samtools, calcRoiCovg and bedtools in /bin dir, and which were
+      compiled on CentOS, and tested on CentOS/Ubuntu.
 
 Prerequisites for Ubuntu:
 
@@ -68,6 +70,7 @@ Prerequisites for CentOS:
 
 
 Change C++11 compiler for CentOS (required for joinx installation)
+
    Reference 
 > https://www.softwarecollections.org/en/scls/rhscl/devtoolset-3/ 
 
