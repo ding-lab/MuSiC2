@@ -39,8 +39,7 @@ Key commands:
 
 Install (Ubuntu & CentOS)
 -------
-Note: we provided binaries for joinx, samtools, calcRoiCovg and bedtools in /bin dir, and which were
-      compiled on CentOS, and tested on CentOS/Ubuntu.
+Note: We provided binaries for joinx, samtools, calcRoiCovg and bedtools in /bin dir, and which were compiled on CentOS, and tested on CentOS/Ubuntu.
 
 Prerequisites for Ubuntu:
 
