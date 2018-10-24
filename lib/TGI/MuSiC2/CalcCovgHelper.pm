@@ -17,7 +17,7 @@ sub new {
     $this->{_REF_SEQ}  = undef;
     $this->{_NOR_TUM_PAIR} = undef;
     $this->{_OUTPUT_FILE} = undef;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
+    $this->{_BP_CLASS_TYPES} = 'AT,CG,CpG';
     $this->{_NOR_MIN_DEPTH} = 6;
     $this->{_TUM_MIN_DEPTH} = 8;
     $this->{_MIN_MAPQ} = 20;
@@ -145,7 +145,7 @@ OPTIONAL INPUTS
     Default value '20' if not specified
   bp-class-types
     Bp class types for coverage calculating,delimited by comma
-    Default value 'AT,CpG,CG' if not specified
+    Default value 'AT,CG,CpG' if not specified
 
 DESCRIPTION
     This script counts bases with sufficient coverage in the ROIs of each gene in the given pair of
