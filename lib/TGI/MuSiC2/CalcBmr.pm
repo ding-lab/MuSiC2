@@ -53,7 +53,7 @@ sub new {
     $this->{_SKIP_SILENT} = 1;
     $this->{_NOSKIP_SILENT} = 0;
     $this->{_BMR_OUTPUT} = 0;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
+    $this->{_BP_CLASS_TYPES} = 'AT,CG,CpG';
 
     bless $this, $class;
     $this->process();
@@ -790,7 +790,7 @@ OPTIONAL INPUTS
     Comma-delimited list of genes to ignore for background mutation rates 
   bp-class-types
     Comma-delimited list of bp types.
-    Default value 'AT,CpG,CG'
+    Default value 'AT,CG,CpG'
 
 REQUIRED OUTPUTS
   bmr-output

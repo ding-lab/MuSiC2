@@ -18,7 +18,7 @@ sub new {
     $this->{_REF_SEQ}  = undef;
     $this->{_WIG_LIST} = undef;
     $this->{_OUTPUT_DIR} = undef;
-    $this->{_BP_CLASS_TYPES} = 'AT,CpG,CG';
+    $this->{_BP_CLASS_TYPES} = 'AT,CG,CpG';
     $this->{_NOR_MIN_DEPTH} = 6;
     $this->{_TUM_MIN_DEPTH} = 8;
     $this->{_MIN_MAPQ} = 20;
