@@ -140,6 +140,37 @@ Notes: Python is needed to be installed if you run music2 dendrix & dendrix-perm
 example
 -------
 
+1. smg test commands example:
+
+Make a dir for MuSiC2 smg running
+
+        mkdir music2_smg_running
+        cd music2_smg_running
+
+Make subdirs where all the runtime logs can be written
+
+        mkdir logs
+        mkdir logs/calc_covg
+ 
+Get calculate coverage command list
+
+        music2 bmr calc-covg --roi-file ./example/smg/example.roi_file --reference-sequence /reference_dir/ucsc.hg19.fa --bam-list ./example/smg/example.bam_list --output-dir . --cmd-list-file example.run-coverage-command
+
+Run roi coverage for each sample
+
+        bash example.run-coverage-command
+
+Run bmr calc-covg again to get gene coverage
+
+        music2 bmr calc-covg --roi-file ./example/smg/example.roi_file --reference-sequence /reference_dir/ucsc.hg19.fa --bam-list ./example/smg/example.bam_list --output-dir .
+
+Run calc-bmr to measure overall and per-gene mutation rates. Give it extra memory, because it may need it
+
+        music2 bmr calc-bmr --roi-file ./example/smg/example.roi_file --reference-sequence /reference_dir/ucsc.hg19.fa --bam-list ./example/smg/example.bam_list --maf-file ./example/smg/example.input.maf --output-dir . --show-skipped
+
+Run SMG test using an FDR threshold appropriate for these mutation rates
+
+        music2 smg --gene-mr-file gene_mrs --output-file smgs --max-fdr 0.05 --processors 1
 
 
 SUPPORT
