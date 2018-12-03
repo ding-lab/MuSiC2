@@ -155,7 +155,7 @@ OUTPUT
 
 EXAMPLE
 
-    music2 dendrix --mutations-file example/dendrix/mutation_matrix --set-size 2 --minimum-freq 1 \
+    music2 dendrix --mutations-file example/dendrix/mutation_matrix --set-size 3 --minimum-freq 1 \
       --number-interations 1000000 --analyzed-genes-file example/dendrix/analyzed_genes \
       --number-experiments 1 --step-length 1000
 
@@ -191,13 +191,13 @@ EXAMPLE
 
     If you want to compute the p-value for the first set having weight 48, you can run:
       
-    music2 dendrix-permutation --mutations-file example/dendrix/mutation_matrix --set-size 2 --minimum-freq 1 \
+    music2 dendrix-permutation --mutations-file example/dendrix/mutation_matrix --set-size 3 --minimum-freq 1 \
       --number-interations 1000000 --analyzed-genes-file example/dendrix/analyzed_genes \
       --number-permutations 100 --value-tested 48 --rank 1
 
     If instead you want to compute the p-value for the second set having weight 47, you can run:
     
-    music2 dendrix-permutation --mutations-file example/dendrix/mutation_matrix --set-size 2 --minimum-freq 1 \
+    music2 dendrix-permutation --mutations-file example/dendrix/mutation_matrix --set-size 3 --minimum-freq 1 \
       --number-interations 1000000 --analyzed-genes-file example/dendrix/analyzed_genes \
       --number-permutations 100 --value-tested 47 --rank 2
 
