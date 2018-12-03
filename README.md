@@ -140,7 +140,7 @@ Notes: Python is needed to be installed if you run music2 dendrix & dendrix-perm
 example
 -------
 
-1. smg test commands example:
+1. smg test example:
 
 Make a dir for MuSiC2 smg running
 
@@ -172,6 +172,20 @@ Run SMG test using an FDR threshold appropriate for these mutation rates
 
         music2 smg --gene-mr-file gene_mrs --output-file smgs --max-fdr 0.05 --processors 1
 
+2. dendrix example:
+
+Runs the MCMC for 1000000 iterations, sampling sets of size 3 every 1000
+iterations. Produces two files  (since 1 experiment is run):
+        
+        music2 dendrix --mutations-file example/dendrix/mutation_matrix --set-size 3 --minimum-freq 1 \
+            --number-interations 1000000 --analyzed-genes-file example/dendrix/analyzed_genes \
+            --number-experiments 1 --step-length 1000
+
+If you want to compute the p-value for the second set having weight 47, you can run:
+    
+        music2 dendrix-permutation --mutations-file example/dendrix/mutation_matrix --set-size 3 --minimum-freq 1 \
+            --number-interations 1000000 --analyzed-genes-file example/dendrix/analyzed_genes \
+            --number-permutations 100 --value-tested 47 --rank 2
 
 SUPPORT
 -------
