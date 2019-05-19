@@ -1,0 +1,25 @@
+LongGeneFilter:
+* introduce basic tests which reproduce tests done in development.
+* Add detailed output, where (x,y) are output along with genes
+* 
+
+
+
+Clinical correlation:
+    /gscuser/mwyczalk/projects/Virus/Virus_2013.9a/analysis/Music/UnifiedVirus2
+    /gscuser/mwyczalk/src/genome/lib/perl/Genome/Model/Tools/Music/ClinicalCorrelation.pm.R
+
+
+TODO:
+* Clean up Clinical Correlation
+  * get rid of non-GLM module
+  * Bring everything up to consistency
+
+Installation:
+* cpanm Dist::Zilla
+
+RECALL:
+
+To make tarball:
+dzil build
+
