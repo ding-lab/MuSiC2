@@ -465,7 +465,7 @@ DESCRIPTION
     mutations in each gene (or variant) and each phenotype trait are random. Lower
     P-values indicate lower randomness, or likely true correlations.
 
-    VARIANT 
+    VARIANT -- TODO, update
     The analysis accepts a mixed numeric and categoric variant data file,
     defined by --variant-data-file, with these conventions: TODO confirm
         * Headers are required, columns are tab-separated, leading # indicates comment

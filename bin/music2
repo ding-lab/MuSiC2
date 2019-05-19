@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/local/bin/perl
 #----------------------------------
 # $Authors: Beifang Niu $
 # $Date: 2013-08-08 13:22:08 -0500 (Thu Aug  8 13:22:08 CDT 2013) $
@@ -12,11 +12,12 @@ our $VERSION = 'v0.2';
 use Getopt::Long;
 
 use TGI::MuSiC2::Bmr;
-use TGI::MuSiC2::Smg;
-use TGI::MuSiC2::Dendrix;
-#use TGI::MuSiC2::Survival;
 use TGI::MuSiC2::ClinicalCorrelation;
+use TGI::MuSiC2::Dendrix;
+use TGI::MuSiC2::MutationMatrix;
 use TGI::MuSiC2::LongGeneFilter;
+use TGI::MuSiC2::Smg;
+#use TGI::MuSiC2::Survival;
 
 my $sub_cmd = shift;
 my %cmds = map{ 
@@ -28,6 +29,7 @@ my %cmds = map{
       create-visualizations 
       data 
       long-gene-filter
+      mutation-matrix
       mutation-relation 
       path-scan 
       pfam 
@@ -53,6 +55,7 @@ SWITCH:{
 #    $sub_cmd eq 'survival' && do { TGI::MuSiC2::Survival->new(); last SWITCH; };
 
     $sub_cmd eq 'clinical-correlation' && do { TGI::MuSiC2::ClinicalCorrelation->new(); last SWITCH; };
+    $sub_cmd eq 'mutation-matrix' && do { TGI::MuSiC2::MutationMatrix->new(); last SWITCH; };
     $sub_cmd eq 'long-gene-filter' && do { TGI::MuSiC2::LongGeneFilter->new(); last SWITCH; };
     #
     ##
@@ -81,6 +84,7 @@ data                   ...  Parse, standardize, and index various third-party da
                              used by the tools in MuSiC.
 long-gene-filter            Find conditions for which significance status is no longer 
                             related to gene size 
+mutation-matrix             Create data file summarizing sample mutations from MAF
 mutation-relation           Identify relationships of mutation concurrency or mutual    
                              exclusivity in genes across cases.
 path-scan                   Find signifcantly mutated pathways in a cohort given a list 
