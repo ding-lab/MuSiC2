@@ -7,7 +7,7 @@ Usage
 
     Program:     music2 - Mutational Significance in Cancer (Cancer Mutation Analysis) version 2.
     Version:     V0.2
-    Author:      Beifang Niu && Cyriac Kandoth && Matthew Wyczalkowski
+    Author:      Beifang Niu && Matthew Wyczalkowski
 
     Usage:  music2 <command> [options]
 
@@ -193,6 +193,4 @@ SUPPORT
 If you have any questions, please contact one or more of the following folks:
 
 Beifang Niu <bniu@sccas.cn>
-Cyriac Kandoth <ckandoth@gmail.com>
 Li Ding <lding@wustl.edu>
-
